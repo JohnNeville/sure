@@ -106,7 +106,9 @@ class Family::DataExporter
 
     def generate_transactions_csv
       generate_sanitized_csv do |csv|
-        csv << TRANSACTIONS_CSV_HEADERS
+        # The columns TransactionImport recognises, plus the reviewed state this
+        # fork round-trips through the data import.
+        csv << (TRANSACTIONS_CSV_HEADERS + [ "reviewed" ])
 
         # Only export transactions from accounts belonging to this family
         # Exclude split parents (export children instead)
@@ -121,7 +123,8 @@ class Family::DataExporter
               transaction.category&.name,
               transaction.tags.map { |tag| escape_legacy_tag_name(tag.name) }.join(","),
               transaction.entry.notes,
-              transaction.entry.currency
+              transaction.entry.currency,
+              transaction.reviewed?
             ]
           end
       end
@@ -451,6 +454,7 @@ class Family::DataExporter
           security_id: transaction.serializable_security_id,
           exchange_rate: transaction.numeric_exchange_rate,
           amount_currency: transaction.entry.currency,
+          reviewed_at: transaction.reviewed_at,
           created_at: transaction.created_at,
           updated_at: transaction.updated_at
         }
