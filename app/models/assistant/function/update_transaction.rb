@@ -11,8 +11,10 @@ class Assistant::Function::UpdateTransaction < Assistant::Function
         Use get_transactions first to find the transaction id, and get_categories,
         get_tags, or the current transaction merchant before referencing related ids.
 
-        This tool can update the transaction name, notes, category, merchant, and
-        tags. It will not edit split child transactions directly.
+        This tool can update the transaction name, notes, category, merchant, tags,
+        and reviewed state. It will not edit split child transactions directly.
+        Editing fields does not change the reviewed state; pass reviewed explicitly
+        to mark a transaction reviewed or as needing review.
       INSTRUCTIONS
     end
   end
@@ -49,6 +51,10 @@ class Assistant::Function::UpdateTransaction < Assistant::Function
           type: "array",
           items: { type: "string" },
           description: "Full list of tag IDs to set. Use an empty array to clear all tags. Omit to leave unchanged."
+        },
+        reviewed: {
+          type: "boolean",
+          description: "true to mark the transaction reviewed, false to mark it as needing review. Omit to leave unchanged."
         }
       }
     )
@@ -71,6 +77,10 @@ class Assistant::Function::UpdateTransaction < Assistant::Function
       return error("invalid_tags", "One or more tag_ids do not belong to the user's family.") unless valid_tag_ids?(tag_ids)
     end
 
+    if params.key?("reviewed") && ![ true, false ].include?(params["reviewed"])
+      return error("invalid_reviewed", "reviewed must be true or false.")
+    end
+
     return error("no_changes", "Provide at least one field to update.") if no_changes?(entry_attrs, params)
 
     Entry.transaction do
@@ -81,6 +91,8 @@ class Assistant::Function::UpdateTransaction < Assistant::Function
         transaction.save!
         transaction.lock_attr!(:tag_ids)
       end
+
+      transaction.mark_reviewed!(params["reviewed"]) if params.key?("reviewed")
 
       entry.sync_account_later
       entry.lock_saved_attributes!
@@ -154,7 +166,7 @@ class Assistant::Function::UpdateTransaction < Assistant::Function
     end
 
     def no_changes?(entry_attrs, params)
-      entry_attrs.empty? && !params.key?("tag_ids")
+      entry_attrs.empty? && !params.key?("tag_ids") && !params.key?("reviewed")
     end
 
     def serialize(transaction)
@@ -172,7 +184,8 @@ class Assistant::Function::UpdateTransaction < Assistant::Function
           id: transaction.merchant.id,
           name: transaction.merchant.name
         },
-        tags: transaction.tags.map { |tag| { id: tag.id, name: tag.name } }
+        tags: transaction.tags.map { |tag| { id: tag.id, name: tag.name } },
+        reviewed: transaction.reviewed?
       }
     end
 

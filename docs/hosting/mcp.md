@@ -135,7 +135,7 @@ At the time of writing, `tools/list` includes:
 
 | Tool | Description |
 |------|-------------|
-| `get_transactions` | Search transactions with filters (exact names or ids), sorting by date or absolute amount, and pagination |
+| `get_transactions` | Search transactions with filters (exact names or ids, reviewed state), sorting by date or absolute amount, and pagination |
 | `get_recurring_transactions` | Detected and manual recurring transactions (subscriptions, bills, salaries) with expected dates and per-currency totals |
 | `get_accounts` | Accounts with ids and current balances; pass `include_balance_series: true` for a period-bounded history series |
 | `get_holdings` | Query investment holdings |
@@ -148,7 +148,7 @@ At the time of writing, `tools/list` includes:
 | `create_goal` | Create a savings goal linked to depository accounts |
 | `create_tag` / `update_tag` | Manage tags |
 | `create_category` / `update_category` | Manage categories |
-| `update_transaction` | Edit a transaction's metadata (name, notes, category, merchant, tags) |
+| `update_transaction` | Edit a transaction's metadata (name, notes, category, merchant, tags) and mark it reviewed or as needing review |
 | `update_budget` | Update budget allocations for a month |
 | `import_bank_statement` | Import bank statement data |
 | `search_family_files` | Search documents uploaded through the import flow. Note this is the vector-store document index, not the Statement Vault — statements archived via `upload_account_statement` are not searchable through it |
