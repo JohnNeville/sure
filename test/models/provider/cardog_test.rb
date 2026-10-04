@@ -51,6 +51,53 @@ class Provider::CardogTest < ActiveSupport::TestCase
     assert_equal 50, usage.limit
   end
 
+  test "syncs usage and allowance from Cardog's credit headers" do
+    ProviderRequestCount.increment!("cardog", by: 2)
+    stub_request(:get, RESOLVE_URL).with(query: hash_including("domain" => "model-year"))
+      .to_return(status: 200, body: resolve_body, headers: { "X-Credits-Allowance" => "1000", "X-Credits-Remaining" => "795" })
+    stub_request(:get, QUOTE_URL)
+      .to_return(status: 200, body: quote_body, headers: { "X-Credits-Allowance" => "1000", "X-Credits-Remaining" => "790" })
+
+    @provider.fetch_vehicle_valuation(year: 2021, make: "Honda", model: "Civic")
+
+    assert_equal 210, ProviderRequestCount.count_for("cardog")
+    usage = @provider.usage.data
+    assert_equal 210, usage.used
+    assert_equal 1000, usage.limit
+    assert @provider.requests_remaining?
+  end
+
+  test "an ENV cap takes priority over the reported allowance" do
+    ProviderRequestCount.set!("cardog", 10, limit: 1000)
+
+    ENV["CARDOG_MAX_REQUESTS_PER_MONTH"] = "75"
+    assert_equal 75, @provider.usage.data.limit
+  ensure
+    ENV.delete("CARDOG_MAX_REQUESTS_PER_MONTH")
+  end
+
+  test "keeps the reported usage when the quote fails after a successful resolve" do
+    stub_request(:get, RESOLVE_URL).with(query: hash_including("domain" => "model-year"))
+      .to_return(status: 200, body: resolve_body, headers: { "X-Credits-Allowance" => "50", "X-Credits-Remaining" => "41" })
+    stub_request(:get, QUOTE_URL).to_return(status: 404, body: {}.to_json)
+
+    response = @provider.fetch_vehicle_valuation(year: 2021, make: "Honda", model: "Civic")
+
+    assert_not response.success?
+    assert_equal 9, ProviderRequestCount.count_for("cardog")
+  end
+
+  test "ignores malformed credit headers" do
+    stub_request(:get, RESOLVE_URL).with(query: hash_including("domain" => "model-year"))
+      .to_return(status: 200, body: resolve_body, headers: { "X-Credits-Allowance" => "lots", "X-Credits-Remaining" => "" })
+    stub_request(:get, QUOTE_URL).to_return(status: 200, body: quote_body)
+
+    @provider.fetch_vehicle_valuation(year: 2021, make: "Honda", model: "Civic")
+
+    assert_equal Provider::Cardog::LOOKUP_CREDITS, ProviderRequestCount.count_for("cardog")
+    assert_equal 50, @provider.usage.data.limit
+  end
+
   test "returns a friendly error when no model year matches" do
     stub_request(:get, RESOLVE_URL).with(query: hash_including("domain" => "model-year")).to_return(status: 200, body: resolve_body(ref: nil))
 
