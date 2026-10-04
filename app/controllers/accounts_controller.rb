@@ -75,7 +75,7 @@ class AccountsController < ApplicationController
   end
 
   def sync_all
-    family.request_plaid_transactions_refreshes_later(source: "AccountsController#sync_all")
+    family.request_plaid_transactions_refreshes_later(source: "AccountsController#sync_all", force: true)
     family.sync_later
     redirect_to accounts_path, notice: t("accounts.sync_all.syncing")
   end

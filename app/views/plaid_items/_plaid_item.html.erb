@@ -83,6 +83,20 @@
 
     <% unless plaid_item.scheduled_for_deletion? %>
       <div class="space-y-4 mt-4">
+        <% if plaid_item.manageable_by?(Current.user) && plaid_item.supports_product?("transactions") %>
+          <%= styled_form_with model: plaid_item,
+                               scope: :plaid_item,
+                               url: plaid_item_path(plaid_item),
+                               method: :patch,
+                               data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
+            <%= form.select :refresh_interval,
+                            PlaidItem.refresh_intervals.keys.map { |interval| [ t("plaid_items.plaid_item.refresh_interval.options.#{interval}"), interval ] },
+                            { label: t("plaid_items.plaid_item.refresh_interval.label") },
+                            { data: { auto_submit_form_target: "auto" } } %>
+            <p class="text-xs text-secondary mt-1"><%= t("plaid_items.plaid_item.refresh_interval.description") %></p>
+          <% end %>
+        <% end %>
+
         <%# NOTE: no per-viewer filtering here. This partial is also rendered
             by PlaidItem::SyncCompleteEvent from the sync job, where
             Current.user is nil (same gotcha as accounts/_sync_controls), so a

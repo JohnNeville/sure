@@ -6,6 +6,7 @@ class PlaidTransactionsRefreshJob < ApplicationJob
 
     begin
       plaid_item.plaid_provider.refresh_transactions(plaid_item.access_token)
+      plaid_item.update_columns(last_refresh_requested_at: Time.current)
     rescue => error
       DebugLogEntry.capture(
         category: "provider_sync",

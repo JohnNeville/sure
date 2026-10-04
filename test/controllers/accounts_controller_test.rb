@@ -193,7 +193,7 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     sequence = sequence("manual sync all")
     Family.any_instance
       .expects(:request_plaid_transactions_refreshes_later)
-      .with(source: "AccountsController#sync_all")
+      .with(source: "AccountsController#sync_all", force: true)
       .in_sequence(sequence)
     Family.any_instance.expects(:sync_later).once.in_sequence(sequence)
 

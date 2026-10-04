@@ -303,6 +303,60 @@ class PlaidItemsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "accounts page offers the refresh interval on a manageable Plaid connection" do
+    plaid_items(:one).update!(refresh_interval: "weekly")
+
+    get accounts_url
+
+    assert_response :success
+    assert_select "form[action=?]", plaid_item_path(plaid_items(:one)) do
+      assert_select "select[name=?]", "plaid_item[refresh_interval]" do
+        assert_select "option[selected][value=weekly]"
+        assert_select "option", count: 5
+      end
+    end
+  end
+
+  test "update changes the refresh interval" do
+    item = plaid_items(:one)
+
+    patch plaid_item_url(item), params: { plaid_item: { refresh_interval: "monthly" } }
+
+    assert_response :see_other
+    assert_equal "monthly", item.reload.refresh_interval
+    assert_equal "Refresh interval updated.", flash[:notice]
+  end
+
+  test "update rejects an unknown refresh interval" do
+    item = plaid_items(:one)
+
+    patch plaid_item_url(item), params: { plaid_item: { refresh_interval: "hourly" } }
+
+    assert_response :see_other
+    assert_equal "always", item.reload.refresh_interval
+    assert_equal "Could not update the refresh interval.", flash[:alert]
+  end
+
+  test "update ignores attributes other than the refresh interval" do
+    item = plaid_items(:one)
+
+    patch plaid_item_url(item), params: { plaid_item: { refresh_interval: "weekly", name: "Renamed", access_token: "stolen" } }
+
+    item.reload
+    assert_equal "weekly", item.refresh_interval
+    assert_equal "Test Bank", item.name
+  end
+
+  test "update is not available for another family's connection" do
+    other = Family.create!(name: "Other Family", currency: "USD", locale: "en")
+    foreign = PlaidItem.create!(family: other, plaid_id: "item_foreign", access_token: "token", name: "Foreign Bank")
+
+    patch plaid_item_url(foreign), params: { plaid_item: { refresh_interval: "never" } }
+
+    assert_response :not_found
+    assert_equal "always", foreign.reload.refresh_interval
+  end
+
   test "select_existing_account offers a member only the connections they own" do
     member = users(:family_member)
     plaid_items(:one).update!(owner: users(:family_admin))
