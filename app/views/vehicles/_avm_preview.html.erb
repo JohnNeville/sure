@@ -1,0 +1,54 @@
+<%# locals: (account:, provider_key:, preview:, vehicle:) %>
+
+<% provider_name = t("vehicles.avm_providers.#{provider_key}") %>
+
+<%= render DS::Dialog.new do |dialog| %>
+  <% dialog.with_header(title: t("vehicles.new.avm_preview_title", provider: provider_name)) %>
+  <% dialog.with_body do %>
+    <div class="flex flex-col gap-4 min-h-80">
+      <p class="text-sm text-secondary"><%= t("vehicles.new.avm_preview_description", provider: provider_name) %></p>
+
+      <div class="flex flex-col gap-2 text-sm">
+        <div class="flex justify-between gap-2">
+          <span class="text-secondary"><%= t("accounts.form.name_label") %></span>
+          <span class="text-primary font-medium"><%= account.name %></span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-secondary"><%= t("vehicles.overview.make_model") %></span>
+          <span class="text-primary font-medium"><%= [ vehicle.make, vehicle.model ].map(&:presence).compact.join(" ") %></span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-secondary"><%= t("vehicles.overview.year") %></span>
+          <span class="text-primary font-medium"><%= vehicle.year %></span>
+        </div>
+        <%= render "shared/ruler", classes: "my-1" %>
+        <div class="flex justify-between gap-2">
+          <span class="text-secondary"><%= t("vehicles.new.avm_preview_market_value") %></span>
+          <span class="text-primary font-medium privacy-sensitive"><%= format_money(Money.new(preview.valuation, preview.currency)) %></span>
+        </div>
+      </div>
+
+      <p class="text-sm text-secondary"><%= t("vehicles.new.avm_us_only", provider: provider_name) %></p>
+    </div>
+
+    <%# The confirm step rebuilds everything from the signed token, proving
+        the lookup ran; only routing params travel as plain fields. %>
+    <%= styled_form_with model: account, url: vehicles_path(return_to: params[:return_to]), scope: :account do |form| %>
+      <%= hidden_field_tag :avm_provider, provider_key %>
+      <%= hidden_field_tag :avm_step, "confirm" %>
+      <%= hidden_field_tag :avm_preview_token, @avm_preview_token %>
+      <%= form.hidden_field :accountable_type, value: "Vehicle" %>
+
+      <div class="flex justify-between items-center mt-4">
+        <%= link_to t("vehicles.new.avm_preview_back"),
+                    new_vehicle_path(method: provider_key, return_to: params[:return_to]),
+                    class: "text-sm text-secondary hover:text-primary underline" %>
+        <%= render DS::Button.new(
+          text: t("vehicles.new.avm_preview_confirm"),
+          variant: "primary",
+          type: :submit,
+        ) %>
+      </div>
+    <% end %>
+  <% end %>
+<% end %>

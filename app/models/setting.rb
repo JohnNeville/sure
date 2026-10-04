@@ -123,6 +123,7 @@ class Setting < RailsSettings::Base
   field :rentcast_api_key, type: :string, default: ENV["RENTCAST_API_KEY"]
   field :realie_api_key, type: :string, default: ENV["REALIE_API_KEY"]
   field :chimnie_api_key, type: :string, default: ENV["CHIMNIE_API_KEY"]
+  field :cardog_api_key, type: :string, default: ENV["CARDOG_API_KEY"]
   field :terrascoutx_api_key, type: :string, default: ENV["TERRASCOUTX_API_KEY"]
 
   # Instance-wide Plaid credentials; provider configuration handles ENV fallback.
@@ -148,6 +149,7 @@ class Setting < RailsSettings::Base
       realie_api_key
       chimnie_api_key
       terrascoutx_api_key
+      cardog_api_key
       openai_access_token
       anthropic_access_token
       jev_api_key

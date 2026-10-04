@@ -18,6 +18,17 @@ class Provider::RegistryTest < ActiveSupport::TestCase
     end
   end
 
+  test "vehicle_valuations concept exposes cardog only when an API key is set" do
+    ClimateControl.modify("CARDOG_API_KEY" => nil) do
+      Setting.stubs(:cardog_api_key).returns(nil)
+      assert_equal %i[cardog], Provider::Registry.for_concept(:vehicle_valuations).provider_keys
+      assert_equal [], Provider::Registry.for_concept(:vehicle_valuations).providers
+
+      Setting.stubs(:cardog_api_key).returns("key")
+      assert_instance_of Provider::Cardog, Provider::Registry.for_concept(:vehicle_valuations).get_provider(:cardog)
+    end
+  end
+
   test "providers returns configured providers" do
     # Mock a configured OpenAI provider
     mock_provider = mock("openai_provider")
