@@ -49,6 +49,15 @@ class Rule::Registry::TransactionResourceTest < ActiveSupport::TestCase
     assert_includes keys, "auto_detect_merchants"
   end
 
+  test "offers the review status condition and the mark as reviewed action" do
+    rule = build_rule(action_type: "mark_transaction_reviewed")
+
+    assert_includes rule.registry.condition_filters.map(&:key), "transaction_review_status"
+    assert_includes Rule::Condition::SUPPORTED_CONDITION_TYPES, "transaction_review_status"
+    assert_includes rule.registry.action_executors.map(&:key), "mark_transaction_reviewed"
+    assert_instance_of Rule::ActionExecutor::MarkTransactionReviewed, rule.actions.first.executor
+  end
+
   private
     def build_rule(action_type:)
       @family.rules.create!(
