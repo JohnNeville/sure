@@ -28,6 +28,37 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_no_match categorized.name, response.body
   end
 
+  test "show filters account activity by review state" do
+    reviewed = create_transaction(account: @account, name: "Reviewed Filter Target", category: nil)
+    reviewed.transaction.mark_reviewed!
+    unreviewed = create_transaction(account: @account, name: "Unreviewed Filter Target", category: nil)
+
+    get account_url(@account, q: { reviewed: [ "reviewed" ] })
+
+    assert_response :success
+    assert_select "input#q_reviewed_reviewed[checked]"
+    assert_match reviewed.name, response.body
+    assert_no_match unreviewed.name, response.body
+
+    get account_url(@account, q: { reviewed: [ "unreviewed" ] })
+
+    assert_select "input#q_reviewed_unreviewed[checked]"
+    assert_match unreviewed.name, response.body
+    assert_no_match reviewed.name, response.body
+  end
+
+  test "show treats both review states checked as no review filter" do
+    reviewed = create_transaction(account: @account, name: "Both States Reviewed", category: nil)
+    reviewed.transaction.mark_reviewed!
+    unreviewed = create_transaction(account: @account, name: "Both States Unreviewed", category: nil)
+
+    get account_url(@account, q: { reviewed: [ "reviewed", "unreviewed" ] })
+
+    assert_response :success
+    assert_match reviewed.name, response.body
+    assert_match unreviewed.name, response.body
+  end
+
   test "index delegates whole-row account clicks to the account link" do
     get accounts_url
 

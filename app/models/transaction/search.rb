@@ -6,7 +6,7 @@ class Transaction::Search
   AI_STATUSES = %w[current history].freeze
 
   # Review state filter values (used by the view)
-  REVIEW_STATUSES = %w[reviewed unreviewed].freeze
+  REVIEW_STATUSES = Transaction::REVIEW_STATUSES
 
   attribute :search, :string
   attribute :amount, :string
@@ -247,10 +247,7 @@ class Transaction::Search
 
     # Filter by review state. Both values selected means no filter.
     def apply_reviewed_filter(query, states)
-      wanted = Array(states) & REVIEW_STATUSES
-      return query if wanted.empty? || wanted.sort == REVIEW_STATUSES.sort
-
-      wanted == [ "reviewed" ] ? query.reviewed : query.unreviewed
+      query.with_review_state(states)
     end
 
     # Filter by automatic-categorization provenance. Uses EXISTS so a

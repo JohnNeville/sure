@@ -110,6 +110,27 @@
                                     onchange: "document.getElementById('entries-search').requestSubmit()" %>
                   <%= label_tag "q_uncategorized", t("accounts.show.activity.uncategorized_only"), class: "text-sm text-primary" %>
                 </div>
+                <p class="text-xs font-medium text-secondary uppercase pt-1"><%= t("accounts.show.activity.review") %></p>
+                <div class="flex items-center gap-3">
+                  <%= check_box_tag "q[reviewed][]",
+                                    "reviewed",
+                                    params.dig(:q, :reviewed)&.include?("reviewed"),
+                                    id: "q_reviewed_reviewed",
+                                    class: "checkbox checkbox--light",
+                                    form: "entries-search",
+                                    onchange: "document.getElementById('entries-search').requestSubmit()" %>
+                  <%= label_tag "q_reviewed_reviewed", t("accounts.show.activity.reviewed"), class: "text-sm text-primary" %>
+                </div>
+                <div class="flex items-center gap-3">
+                  <%= check_box_tag "q[reviewed][]",
+                                    "unreviewed",
+                                    params.dig(:q, :reviewed)&.include?("unreviewed"),
+                                    id: "q_reviewed_unreviewed",
+                                    class: "checkbox checkbox--light",
+                                    form: "entries-search",
+                                    onchange: "document.getElementById('entries-search').requestSubmit()" %>
+                  <%= label_tag "q_reviewed_unreviewed", t("accounts.show.activity.unreviewed"), class: "text-sm text-primary" %>
+                </div>
               </div>
             <% end %>
           <% end %>

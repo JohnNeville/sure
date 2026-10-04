@@ -106,12 +106,15 @@ en:
         new_transfer: New transfer
         no_entries: No entries found
         pending: Pending
+        review: Review
+        reviewed: Reviewed
         search:
           placeholder: Search entries by name
         search_placeholder: Search entries by name
         status: Status
         title: Activity
         uncategorized_only: Uncategorized only
+        unreviewed: Not reviewed
       chart:
         balance: Balance
         owed: Amount owed
