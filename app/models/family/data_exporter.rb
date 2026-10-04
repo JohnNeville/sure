@@ -81,7 +81,7 @@ class Family::DataExporter
 
     def generate_transactions_csv
       CSV.generate do |csv|
-        csv << [ "date", "account_name", "amount", "name", "category", "tags", "notes", "currency" ]
+        csv << [ "date", "account_name", "amount", "name", "category", "tags", "notes", "currency", "reviewed" ]
 
         # Only export transactions from accounts belonging to this family
         # Exclude split parents (export children instead)
@@ -96,7 +96,8 @@ class Family::DataExporter
               transaction.category&.name,
               transaction.tags.map { |tag| escape_legacy_tag_name(tag.name) }.join(","),
               transaction.entry.notes,
-              transaction.entry.currency
+              transaction.entry.currency,
+              transaction.reviewed?
             ]
           end
       end
@@ -410,6 +411,7 @@ class Family::DataExporter
           merchant_id: transaction.merchant_id,
           tag_ids: transaction.tag_ids,
           kind: transaction.kind,
+          reviewed_at: transaction.reviewed_at,
           created_at: transaction.created_at,
           updated_at: transaction.updated_at
         }
