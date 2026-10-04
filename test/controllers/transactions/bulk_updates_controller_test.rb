@@ -136,4 +136,42 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
     transaction_entry.reload
     assert_equal [ new_tag.id ], transaction_entry.transaction.tag_ids
   end
+
+  test "bulk edit marks edited transactions reviewed" do
+    entry = @user.family.entries.transactions.first
+    assert_not entry.transaction.reviewed?
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], notes: "Looked at" } }
+
+    assert entry.transaction.reload.reviewed?
+  end
+
+  test "bulk edit can mark transactions reviewed without changing anything else" do
+    entry = @user.family.entries.transactions.first
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], reviewed: "true" } }
+
+    assert_equal "1 transactions updated", flash[:notice]
+    assert entry.transaction.reload.reviewed?
+    assert_not entry.reload.user_modified?
+  end
+
+  test "bulk edit can mark transactions not reviewed, even when it edits them" do
+    entry = @user.family.entries.transactions.first
+    entry.transaction.mark_reviewed!
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], notes: "Edited", reviewed: "false" } }
+
+    assert_equal "Edited", entry.reload.notes
+    assert_not entry.transaction.reload.reviewed?
+  end
+
+  test "bulk edit with no changes leaves review state alone" do
+    entry = @user.family.entries.transactions.first
+    entry.transaction.mark_reviewed!
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ] } }
+
+    assert entry.transaction.reload.reviewed?
+  end
 end

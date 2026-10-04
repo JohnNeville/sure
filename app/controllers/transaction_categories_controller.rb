@@ -10,6 +10,7 @@ class TransactionCategoriesController < ApplicationController
     transaction = @entry.transaction
 
     transaction.record_category_usage!
+    transaction.mark_reviewed!
 
     if needs_rule_notification?(transaction)
       flash[:cta] = {
@@ -41,6 +42,11 @@ class TransactionCategoriesController < ApplicationController
           turbo_stream.replace(
             "category_name_mobile_#{transaction.id}",
             partial: "categories/category_name_mobile",
+            locals: { transaction: transaction }
+          ),
+          turbo_stream.replace(
+            dom_id(transaction, :review),
+            partial: "transactions/review_button",
             locals: { transaction: transaction }
           ),
           *flash_notification_stream_items

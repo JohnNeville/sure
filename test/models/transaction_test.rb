@@ -330,4 +330,35 @@ class TransactionTest < ActiveSupport::TestCase
 
     assert_equal [ tags(:one).id, tags(:two).id ].sort, transaction.reload.tag_ids.sort
   end
+
+  test "reviewed? and the reviewed scopes follow reviewed_at" do
+    family = families(:empty)
+    account = family.accounts.create! name: "Test", balance: 0, currency: "USD", accountable: Depository.new
+    unreviewed = create_transaction(account: account, amount: 10).entryable
+    reviewed = create_transaction(account: account, amount: 20).entryable
+    reviewed.update_columns(reviewed_at: Time.current)
+
+    assert_not unreviewed.reviewed?
+    assert reviewed.reviewed?
+    assert_equal [ reviewed ], family.transactions.reviewed.to_a
+    assert_equal [ unreviewed ], family.transactions.unreviewed.to_a
+  end
+
+  test "mark_reviewed! sets and clears reviewed_at and touches the entry" do
+    family = families(:empty)
+    account = family.accounts.create! name: "Test", balance: 0, currency: "USD", accountable: Depository.new
+    entry = create_transaction(account: account, amount: 10)
+    transaction = entry.entryable
+    original_updated_at = entry.updated_at
+
+    travel 1.minute do
+      transaction.mark_reviewed!
+    end
+
+    assert transaction.reload.reviewed?
+    assert_operator entry.reload.updated_at, :>, original_updated_at
+
+    transaction.mark_reviewed!(false)
+    assert_not transaction.reload.reviewed?
+  end
 end
