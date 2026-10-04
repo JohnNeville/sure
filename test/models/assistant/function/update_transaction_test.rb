@@ -90,4 +90,39 @@ class Assistant::Function::UpdateTransactionTest < ActiveSupport::TestCase
     assert_equal "not_authorized", rename_result[:error]
     assert_equal "Payment received from checking account", transaction.reload.entry.name
   end
+
+  test "marks a transaction reviewed and back" do
+    result = @function.call("id" => @transaction.id, "reviewed" => true)
+
+    assert_equal true, result[:success]
+    assert_equal true, result[:transaction][:reviewed]
+    assert @transaction.reload.reviewed?
+
+    result = @function.call("id" => @transaction.id, "reviewed" => false)
+
+    assert_equal false, result[:transaction][:reviewed]
+    assert_not @transaction.reload.reviewed?
+  end
+
+  test "editing fields leaves the reviewed state alone" do
+    @transaction.mark_reviewed!
+
+    @function.call("id" => @transaction.id, "notes" => "Edited by assistant")
+
+    assert @transaction.reload.reviewed?
+  end
+
+  test "rejects a reviewed value that is not a boolean" do
+    result = @function.call("id" => @transaction.id, "reviewed" => "yes")
+
+    assert_equal false, result[:success]
+    assert_equal "invalid_reviewed", result[:error]
+    assert_not @transaction.reload.reviewed?
+  end
+
+  test "reviewed alone counts as a change" do
+    result = @function.call("id" => @transaction.id, "reviewed" => true)
+
+    assert_equal true, result[:success]
+  end
 end
