@@ -173,6 +173,8 @@ class Transaction::Search
   CURRENT_AUTO_CATEGORY_SQL = "de.value = to_jsonb(transactions.category_id::text) AND #{Transaction::UNSUPERSEDED_ENRICHMENT_SQL}".freeze
 
   ATTACHMENT_STATUSES = %w[with without].freeze
+  # Review state filter values (used by the view)
+  REVIEW_STATUSES = %w[reviewed unreviewed].freeze
 
   attribute :search, :string
   attribute :amount, :string
@@ -189,6 +191,7 @@ class Transaction::Search
   attribute :tags, array: true
   attribute :ai_status, array: true
   attribute :attachment_status, array: true
+  attribute :reviewed, array: true
   attribute :active_accounts_only, :boolean, default: true
 
   attr_reader :family, :accessible_account_ids
@@ -218,6 +221,7 @@ class Transaction::Search
       query = self.class.apply_tag_filter(query, tags)
       query = apply_ai_status_filter(query, ai_status)
       query = apply_attachment_status_filter(query, attachment_status)
+      query = apply_reviewed_filter(query, reviewed)
       query = EntrySearch.apply_search_filter(query, search)
       query = EntrySearch.apply_date_filters(query, start_date, end_date)
       query = EntrySearch.apply_amount_filter(query, amount, amount_operator)
@@ -335,6 +339,14 @@ class Transaction::Search
       end
     end
 
+
+    # Filter by review state. Both values selected means no filter.
+    def apply_reviewed_filter(query, states)
+      wanted = Array(states) & REVIEW_STATUSES
+      return query if wanted.empty? || wanted.sort == REVIEW_STATUSES.sort
+
+      wanted == [ "reviewed" ] ? query.reviewed : query.unreviewed
+    end
 
     # Filter by automatic-categorization provenance. Uses EXISTS so a
     # transaction with both an ai and a bayes enrichment row can't be

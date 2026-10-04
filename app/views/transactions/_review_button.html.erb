@@ -1,0 +1,15 @@
+<%# locals: (transaction:) %>
+
+<%= tag.div id: dom_id(transaction, :review), class: "shrink-0 flex items-center" do %>
+  <% label = transaction.reviewed? ? t("transactions.review_button.mark_unreviewed") : t("transactions.review_button.mark_reviewed") %>
+  <%= button_to transaction_review_path(transaction),
+                method: :patch,
+                params: { reviewed: !transaction.reviewed? },
+                class: "p-1 rounded-md hover:bg-surface-hover cursor-pointer",
+                title: label,
+                form: { data: { turbo_frame: "_top" } },
+                "aria-label": label,
+                "aria-pressed": transaction.reviewed? do %>
+    <%= icon "circle-check", size: "sm", color: transaction.reviewed? ? "success" : "default", class: transaction.reviewed? ? nil : "opacity-40" %>
+  <% end %>
+<% end %>

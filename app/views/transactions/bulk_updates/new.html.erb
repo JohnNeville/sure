@@ -30,6 +30,9 @@
             <% if @has_transfer_entry %>
               <p class="text-xs text-secondary"><%= t(".transfer_fields_hint") %></p>
             <% end %>
+            <%= form.select :reviewed,
+                            [ [ t(".review_reviewed"), "true" ], [ t(".review_unreviewed"), "false" ] ],
+                            { include_blank: t(".review_prompt"), label: t(".review_label") } %>
           </div>
         <% end %>
       </div>

@@ -924,7 +924,10 @@ class Entry < ApplicationRecord
       }.compact_blank
 
       tag_ids = Array.wrap(bulk_update_params[:tag_ids]).reject(&:blank?)
-      has_updates = bulk_attributes.present? || update_tags
+
+      # An edit marks a transaction reviewed unless the caller says otherwise.
+      reviewed_override = ActiveModel::Type::Boolean.new.cast(bulk_update_params[:reviewed]) if bulk_update_params[:reviewed].present?
+      has_updates = bulk_attributes.present? || update_tags || !reviewed_override.nil?
 
       return 0 unless has_updates
 
@@ -1050,6 +1053,14 @@ class Entry < ApplicationRecord
               yield entry if before != entry.rule_input_snapshot(tag_ids: tags_after)
             end
             updated_count += 1
+          end
+
+          if entry.transaction?
+            if reviewed_override.nil?
+              entry.transaction.mark_reviewed! if changed
+            else
+              entry.transaction.mark_reviewed!(reviewed_override)
+            end
           end
         end
       end
