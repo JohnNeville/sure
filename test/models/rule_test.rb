@@ -348,4 +348,31 @@ class RuleTest < ActiveSupport::TestCase
     assert_nil transaction_entry2.transaction.category,
       "Transaction on other account should not be categorized"
   end
+
+  test "rule can auto-review transactions in a trusted category" do
+    reviewed_already = create_transaction(date: Date.current, account: @account, category: @groceries_category)
+    reviewed_already.transaction.mark_reviewed!
+    trusted = create_transaction(date: Date.current, account: @account, category: @groceries_category)
+    other = create_transaction(date: Date.current, account: @account, category: nil)
+
+    rule = Rule.create!(
+      family: @family,
+      resource_type: "transaction",
+      effective_date: 1.day.ago.to_date,
+      conditions: [
+        Rule::Condition.new(condition_type: "compound", operator: "and", sub_conditions: [
+          Rule::Condition.new(condition_type: "transaction_category", operator: "=", value: @groceries_category.id),
+          Rule::Condition.new(condition_type: "transaction_review_status", operator: "=", value: "unreviewed")
+        ])
+      ],
+      actions: [ Rule::Action.new(action_type: "mark_transaction_reviewed") ]
+    )
+
+    assert_equal 1, rule.affected_resource_count
+    rule.apply
+
+    assert trusted.transaction.reload.reviewed?
+    assert_not other.transaction.reload.reviewed?
+    assert reviewed_already.transaction.reload.reviewed?
+  end
 end

@@ -10,6 +10,14 @@ class RulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "the rule form offers the review status condition and the mark as reviewed action" do
+    get new_rule_url(resource_type: "transaction")
+
+    assert_response :success
+    assert_select "option[value='transaction_review_status']", text: "Review status"
+    assert_select "option[value='mark_transaction_reviewed']", text: "Mark as reviewed"
+  end
+
   test "should get new with pre-filled name and action" do
     category = categories(:food_and_drink)
     get new_rule_url(

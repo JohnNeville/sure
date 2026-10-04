@@ -361,4 +361,20 @@ class TransactionTest < ActiveSupport::TestCase
     transaction.mark_reviewed!(false)
     assert_not transaction.reload.reviewed?
   end
+
+  test "with_review_state narrows to one state and ignores both, none or unknown" do
+    family = families(:empty)
+    account = family.accounts.create! name: "Test", balance: 0, currency: "USD", accountable: Depository.new
+    reviewed = create_transaction(account: account, amount: 10).entryable
+    reviewed.mark_reviewed!
+    unreviewed = create_transaction(account: account, amount: 20).entryable
+
+    assert_equal [ reviewed ], family.transactions.with_review_state([ "reviewed" ]).to_a
+    assert_equal [ unreviewed ], family.transactions.with_review_state([ "unreviewed" ]).to_a
+    assert_equal [ reviewed, unreviewed ].sort_by(&:id), family.transactions.with_review_state([ "reviewed", "unreviewed" ]).sort_by(&:id)
+    assert_equal 2, family.transactions.with_review_state([]).count
+    assert_equal 2, family.transactions.with_review_state(nil).count
+    assert_equal 2, family.transactions.with_review_state([ "bogus" ]).count
+    assert_equal [ "reviewed" ], Transaction.narrowing_review_states([ "reviewed", "bogus" ])
+  end
 end

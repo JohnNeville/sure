@@ -27,8 +27,26 @@ class Transaction < ApplicationRecord
 
   accepts_nested_attributes_for :taggings, allow_destroy: true
 
+  REVIEW_STATUSES = %w[reviewed unreviewed].freeze
+
   scope :reviewed, -> { where.not(reviewed_at: nil) }
   scope :unreviewed, -> { where(reviewed_at: nil) }
+
+  # The review states a filter narrows to: one state, or none when the
+  # filter selects both, neither, or only unknown values. Every caller reads
+  # the review checkboxes through this, so they all mean the same thing.
+  def self.narrowing_review_states(states)
+    wanted = Array(states) & REVIEW_STATUSES
+    wanted.one? ? wanted : []
+  end
+
+  scope :with_review_state, ->(states) {
+    case narrowing_review_states(states)
+    when [ "reviewed" ] then reviewed
+    when [ "unreviewed" ] then unreviewed
+    else all
+    end
+  }
 
   def reviewed?
     reviewed_at.present?
