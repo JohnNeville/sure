@@ -894,6 +894,106 @@ end
     assert_empty queries.grep(/SELECT "accounts"\.\* FROM "accounts" WHERE "accounts"\."id" =/)
   end
 
+  test "should include review state in transaction responses" do
+    get api_v1_transaction_url(@transaction), headers: api_headers(@api_key)
+
+    assert_response :success
+    response_data = JSON.parse(response.body)
+    assert_equal false, response_data["reviewed"]
+    assert_nil response_data["reviewed_at"]
+
+    @transaction.mark_reviewed!
+    get api_v1_transactions_url, headers: api_headers(@api_key)
+
+    reviewed_row = JSON.parse(response.body)["transactions"].find { |row| row["id"] == @transaction.id }
+    assert_equal true, reviewed_row["reviewed"]
+    assert_not_nil reviewed_row["reviewed_at"]
+  end
+
+  test "should filter transactions by review state" do
+    @family.transactions.find_each { |transaction| transaction.mark_reviewed!(false) }
+    @transaction.mark_reviewed!
+
+    get api_v1_transactions_url, params: { reviewed: true }, headers: api_headers(@api_key)
+    assert_response :success
+    reviewed_ids = JSON.parse(response.body)["transactions"].map { |row| row["id"] }
+    assert_equal [ @transaction.id ], reviewed_ids
+
+    get api_v1_transactions_url, params: { reviewed: false }, headers: api_headers(@api_key)
+    assert_response :success
+    unreviewed_ids = JSON.parse(response.body)["transactions"].map { |row| row["id"] }
+    assert_not_includes unreviewed_ids, @transaction.id
+    assert_equal @family.transactions.unreviewed.count, unreviewed_ids.size
+  end
+
+  test "should create transactions unreviewed by default" do
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: @account.id, name: "Imported", amount: 10, date: Date.current, currency: "USD", nature: "expense" } },
+         headers: api_headers(@api_key)
+
+    assert_response :created
+    response_data = JSON.parse(response.body)
+    assert_equal false, response_data["reviewed"]
+    assert_nil response_data["reviewed_at"]
+  end
+
+  test "should create a transaction as reviewed when requested" do
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: @account.id, name: "Imported", amount: 10, date: Date.current, currency: "USD", nature: "expense", reviewed: true } },
+         headers: api_headers(@api_key)
+
+    assert_response :created
+    response_data = JSON.parse(response.body)
+    assert_equal true, response_data["reviewed"]
+    assert Transaction.find(response_data["id"]).reviewed?
+  end
+
+  test "should update review state only when requested" do
+    @transaction.mark_reviewed!
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { name: "Renamed" } },
+        headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal true, JSON.parse(response.body)["reviewed"]
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { reviewed: false } },
+        headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal false, JSON.parse(response.body)["reviewed"]
+    assert_not @transaction.reload.reviewed?
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { reviewed: "true" } },
+        headers: api_headers(@api_key)
+    assert_response :success
+    assert @transaction.reload.reviewed?
+  end
+
+  test "should reject an invalid reviewed value" do
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: @account.id, name: "Imported", amount: 10, date: Date.current, currency: "USD", reviewed: "maybe" } },
+         headers: api_headers(@api_key)
+    assert_response :unprocessable_entity
+    assert_equal "reviewed must be true or false", JSON.parse(response.body)["message"]
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { reviewed: "maybe" } },
+        headers: api_headers(@api_key)
+    assert_response :unprocessable_entity
+    assert_not @transaction.reload.reviewed?
+  end
+
+  test "should not let a read-only key change review state" do
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { reviewed: true } },
+        headers: api_headers(@read_only_api_key)
+
+    assert_response :forbidden
+    assert_not @transaction.reload.reviewed?
+  end
+
   private
 
     def api_headers(api_key)
