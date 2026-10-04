@@ -14,6 +14,15 @@ module Family::PlaidConnectable
     plaid(:eu).present? && self.eu?
   end
 
+  # Connections whose billable transactions refresh is rate limited. Syncing
+  # everything from the accounts page requests a refresh for each of them
+  # regardless, so the UI warns first.
+  def plaid_items_with_limited_refresh
+    plaid_items.syncable
+               .where.not(refresh_interval: "always")
+               .select { |item| item.supports_product?("transactions") }
+  end
+
   def create_plaid_item!(public_token:, item_name:, region:)
     public_token_response = plaid(region).exchange_public_token(public_token)
 
