@@ -534,6 +534,9 @@ class Entry < ApplicationRecord
 
       return 0 unless has_updates
 
+      reviewed_entries = []
+      unreviewed_entries = []
+
       transaction do
         all.each do |entry|
           changed = false
@@ -567,12 +570,21 @@ class Entry < ApplicationRecord
           end
 
           if entry.transaction?
-            if reviewed_override.nil?
-              entry.transaction.mark_reviewed! if changed
-            else
-              entry.transaction.mark_reviewed!(reviewed_override)
+            if !reviewed_override.nil?
+              (reviewed_override ? reviewed_entries : unreviewed_entries) << entry
+            elsif changed
+              reviewed_entries << entry
             end
           end
+        end
+
+        # One write per state rather than per entry. Touching the entries keeps
+        # caches keyed on them, such as search totals, current.
+        { reviewed_entries => Time.current, unreviewed_entries => nil }.each do |entries, reviewed_at|
+          next if entries.empty?
+
+          Transaction.where(id: entries.map(&:entryable_id)).update_all(reviewed_at: reviewed_at)
+          Entry.where(id: entries.map(&:id)).update_all(updated_at: Time.current)
         end
       end
 

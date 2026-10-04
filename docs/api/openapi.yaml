@@ -1672,6 +1672,15 @@ components:
           nullable: true
         user_modified:
           type: boolean
+        reviewed:
+          type: boolean
+          description: Whether the transaction has been marked as reviewed
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the transaction was marked reviewed; null when it still
+            needs review
         classification:
           type: string
         account:
@@ -9743,6 +9752,13 @@ paths:
           type: array
           items:
             type: string
+      - name: reviewed
+        in: query
+        required: false
+        description: 'Filter by review state: true for reviewed transactions, false
+          for transactions that still need review'
+        schema:
+          type: boolean
       responses:
         '200':
           description: transactions filtered by date range
@@ -9836,6 +9852,10 @@ paths:
                       type: boolean
                       description: Whether provider syncs should preserve user-supplied
                         transaction changes
+                    reviewed:
+                      type: boolean
+                      description: Set the review state. Omit to leave a new transaction
+                        unreviewed
                     tag_ids:
                       type: array
                       items:
@@ -9946,6 +9966,9 @@ paths:
                       type: boolean
                       description: Whether provider syncs should preserve user-supplied
                         transaction changes
+                    reviewed:
+                      type: boolean
+                      description: Set the review state. Omit to leave it unchanged
         required: true
     delete:
       summary: Delete a transaction

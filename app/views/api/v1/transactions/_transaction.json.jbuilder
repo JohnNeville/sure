@@ -20,6 +20,8 @@ json.notes transaction.entry.notes
 json.external_id transaction.entry.external_id
 json.source transaction.entry.source
 json.user_modified transaction.entry.user_modified
+json.reviewed transaction.reviewed?
+json.reviewed_at transaction.reviewed_at&.iso8601
 json.classification transaction.entry.classification
 
 # Account information
