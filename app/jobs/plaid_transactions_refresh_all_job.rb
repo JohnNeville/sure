@@ -1,9 +1,9 @@
 class PlaidTransactionsRefreshAllJob < ApplicationJob
   queue_as :high_priority
 
-  def perform(family, source:)
+  def perform(family, source:, force: false)
     family.plaid_items.syncable.find_each do |plaid_item|
-      plaid_item.request_transactions_refresh_later
+      plaid_item.request_transactions_refresh_later(force: force)
     rescue => error
       capture_warning(family:, source:, error:)
     end
