@@ -16,13 +16,21 @@ en:
         notes_label: Notes
         notes_placeholder: Enter a note that will be applied to selected transactions
         overview: Overview
+        review_label: Review status
+        review_prompt: Reviewed when edited
+        review_reviewed: Reviewed
+        review_unreviewed: Not reviewed
         save: Save
         tags_label: Tags
         transactions_section: Transactions
+    review_button:
+      mark_reviewed: Mark as reviewed
+      mark_unreviewed: Mark as not reviewed
     unknown_name: Unknown transaction
     selection_bar:
       duplicate: Duplicate
       edit: Edit
+      mark_reviewed: Mark as reviewed
       selected: selected
     form:
       details: Details
@@ -277,6 +285,7 @@ en:
         merchant: Merchant
         ai: AI
         attachment: Attachment
+        review: Review
     convert_to_trade:
       title: Convert to Security Trade
       description: Convert this transaction into a trade with security details
@@ -352,6 +361,8 @@ en:
         attachment_filter:
           with: With attachment
           without: Without attachment
+          reviewed: Reviewed
+          unreviewed: Not reviewed
         ai_filter:
           current: AI
           current_description: Category is still the one assigned automatically (AI or Bayes).
@@ -364,6 +375,9 @@ en:
         status_filter:
           confirmed: Confirmed
           pending: Pending
+        review_filter:
+          reviewed: Reviewed
+          unreviewed: Not reviewed
       menu:
         account_filter: Account
         amount_filter: Amount
