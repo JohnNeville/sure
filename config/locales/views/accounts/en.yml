@@ -63,6 +63,10 @@ en:
         other_accounts: Other accounts
       new_account: New account
       sync: Sync all
+      sync_all_confirm:
+        title: Refresh limited connections?
+        body: "Syncing everything asks Plaid for a fresh update from %{connections} now, even though their refresh interval is limited. Plaid may bill for each of these requests."
+        btn_text: Sync all
     sync_all:
       syncing: "Syncing accounts..."
     new:
