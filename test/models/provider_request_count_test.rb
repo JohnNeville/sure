@@ -28,4 +28,12 @@ class ProviderRequestCountTest < ActiveSupport::TestCase
   test "count_for returns zero when no counter exists" do
     assert_equal 0, ProviderRequestCount.count_for("rentcast")
   end
+
+  test "increment! and decrement! accept a cost" do
+    assert_equal 5, ProviderRequestCount.increment!("cardog", by: 5)
+    assert_equal 6, ProviderRequestCount.increment!("cardog", by: 1)
+    ProviderRequestCount.decrement!("cardog", by: 5)
+
+    assert_equal 1, ProviderRequestCount.count_for("cardog")
+  end
 end
