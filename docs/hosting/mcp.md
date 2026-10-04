@@ -135,7 +135,7 @@ At the time of writing, `tools/list` includes:
 
 | Tool | Description |
 |------|-------------|
-| `get_transactions` | Search transactions with filters (exact names or ids), sorting by date or absolute amount, and pagination |
+| `get_transactions` | Search transactions with filters (exact names or ids, reviewed state), sorting by date or absolute amount, and pagination |
 | `get_recurring_transactions` | Detected and manual recurring transactions (subscriptions, bills, salaries) with expected dates and per-currency totals |
 | `get_accounts` | Accounts with ids and current balances; pass `include_balance_series: true` for a period-bounded history series |
 | `get_holdings` | Query investment holdings |
@@ -151,7 +151,7 @@ At the time of writing, `tools/list` includes:
 | `update_transfer` | Switch a confirmed transfer into an investment or crypto account between an investment contribution (counted as spending) and a plain transfer, e.g. when a brokerage or crypto account only converts currency. Supports `dry_run` |
 | `create_tag` / `update_tag` | Manage tags |
 | `create_category` / `update_category` / `delete_category` | Manage categories: create, rename, recolor, move between parents, and delete (optionally moving transactions to a replacement) |
-| `update_transaction` | Edit a transaction's metadata (name, notes, category, merchant, tags) |
+| `update_transaction` | Edit a transaction's metadata (name, notes, category, merchant, tags) and mark it reviewed or as needing review |
 | `get_transfer_match_candidates` | A transaction's current transfer (including a pending auto-match) or the transactions it could be matched with, as in the "Match transfer" dialog |
 | `match_transfer` | Match a transaction as a transfer with an existing counterpart, or create the counterpart in a target account (e.g. a manual loan). Supports `dry_run` |
 | `review_transfer` | Confirm or reject a pending auto-matched transfer |

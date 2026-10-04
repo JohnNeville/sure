@@ -19,6 +19,10 @@ class Assistant::Function::GetTransactions < Assistant::Function
         This function is not great for:
         - Large time periods (use the get_income_statement function for this)
 
+        Pass reviewed: false to list transactions that still need review, or
+        reviewed: true for ones already reviewed. Each result includes its
+        reviewed state.
+
         Filters take exact names: use the values returned by get_accounts,
         get_categories, get_merchants, and get_tags when unsure. Pass
         types: ["income", "expense"] to exclude transfers between the user's
@@ -95,6 +99,10 @@ class Assistant::Function::GetTransactions < Assistant::Function
           minItems: 1,
           uniqueItems: true
         },
+        reviewed: {
+          type: "boolean",
+          description: "true for reviewed transactions only, false for transactions that still need review. Omit for both."
+        },
         statuses: {
           type: "array",
           description: "Filter by status",
@@ -144,6 +152,10 @@ class Assistant::Function::GetTransactions < Assistant::Function
   def call(params = {})
     search_params = params.except("order", "page", "page_size", "sort_by")
     search_params["status"] = search_params.delete("statuses") if search_params.key?("statuses")
+
+    # The search takes the review states the filter UI offers, not a boolean.
+    reviewed = search_params.delete("reviewed")
+    search_params["reviewed"] = [ reviewed ? "reviewed" : "unreviewed" ] unless reviewed.nil?
 
     # The categories filter now matches Category::UNCATEGORIZED_FILTER_VALUE, a stable
     # sentinel, rather than the localized display name. params_schema still documents
@@ -195,7 +207,8 @@ class Assistant::Function::GetTransactions < Assistant::Function
         category: txn.category&.name,
         merchant: txn.merchant&.name,
         tags: txn.tags.map(&:name),
-        is_transfer: txn.transfer?
+        is_transfer: txn.transfer?,
+        reviewed: txn.reviewed?
       }
     end
 
