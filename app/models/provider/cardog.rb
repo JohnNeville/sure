@@ -31,6 +31,7 @@ class Provider::Cardog < Provider
       # for the resolve call and then fail on the quote.
       record_credits!(LOOKUP_CREDITS)
       @credits_spent = 0
+      @reported_usage = nil
 
       begin
         ref = resolve_model_year("#{year} #{make} #{model}".squish)
@@ -45,9 +46,15 @@ class Provider::Cardog < Provider
           model: model
         )
       ensure
-        # Cardog doesn't charge for non-2xx responses, so only calls that
-        # succeeded count against the budget.
-        refund_credits!(LOOKUP_CREDITS - @credits_spent)
+        if @reported_usage
+          # Cardog's own figures cover every use of the key, so they replace
+          # the local estimate.
+          ProviderRequestCount.set!(provider_key, @reported_usage[:used], limit: @reported_usage[:allowance])
+        else
+          # Cardog doesn't charge for non-2xx responses, so only calls that
+          # succeeded count against the budget.
+          refund_credits!(LOOKUP_CREDITS - @credits_spent)
+        end
       end
     end
   end
@@ -69,7 +76,17 @@ class Provider::Cardog < Provider
 
       response = client.get(path) { |req| req.params.merge!(params) }
       @credits_spent += cost
+      remember_reported_usage(response)
       JSON.parse(response.body)
+    end
+
+    # Metered responses report the account's allowance and what is left of it.
+    def remember_reported_usage(response)
+      allowance = Integer(response.headers["X-Credits-Allowance"], exception: false)
+      remaining = Integer(response.headers["X-Credits-Remaining"], exception: false)
+      return unless allowance && remaining
+
+      @reported_usage = { used: [ allowance - remaining, 0 ].max, allowance: allowance }
     end
 
     def default_error_transformer(error)

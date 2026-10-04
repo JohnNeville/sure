@@ -44,10 +44,12 @@ module Provider::VehicleValuationConcept
   end
 
   private
-    # Defaults to the provider's free tier; paid plans can raise it via ENV
-    # (e.g. CARDOG_MAX_REQUESTS_PER_MONTH), as with the property providers.
+    # An explicit ENV cap (e.g. CARDOG_MAX_REQUESTS_PER_MONTH) wins, then the
+    # allowance the provider last reported, then the provider's free tier.
     def max_credits_per_month
-      ENV.fetch("#{provider_key.upcase}_MAX_REQUESTS_PER_MONTH", self.class::MAX_CREDITS_PER_MONTH).to_i
+      ENV["#{provider_key.upcase}_MAX_REQUESTS_PER_MONTH"].presence&.to_i ||
+        ProviderRequestCount.reported_limit_for(provider_key) ||
+        self.class::MAX_CREDITS_PER_MONTH
     end
 
     def monthly_credits_used
