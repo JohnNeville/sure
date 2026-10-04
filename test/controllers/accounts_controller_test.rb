@@ -10,6 +10,24 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     @account = accounts(:depository)
   end
 
+  test "sync all asks for confirmation when a Plaid connection has a limited refresh interval" do
+    plaid_items(:one).update!(refresh_interval: "monthly")
+
+    get accounts_url
+
+    assert_response :success
+    assert_select "#accounts-sync-controls [data-turbo-confirm]" do |elements|
+      assert_match "Test Bank", elements.first["data-turbo-confirm"]
+    end
+  end
+
+  test "sync all does not ask for confirmation when every Plaid connection refreshes always" do
+    get accounts_url
+
+    assert_response :success
+    assert_select "#accounts-sync-controls [data-turbo-confirm]", count: 0
+  end
+
   test "should get index" do
     get accounts_url
     assert_response :success
