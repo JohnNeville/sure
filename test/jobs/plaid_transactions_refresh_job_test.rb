@@ -19,6 +19,24 @@ class PlaidTransactionsRefreshJobTest < ActiveJob::TestCase
     end
   end
 
+  test "records when the refresh was requested" do
+    @provider.stubs(:refresh_transactions)
+
+    freeze_time do
+      PlaidTransactionsRefreshJob.perform_now(@plaid_item)
+
+      assert_equal Time.current, @plaid_item.reload.last_refresh_requested_at
+    end
+  end
+
+  test "does not record a request that failed" do
+    @provider.stubs(:refresh_transactions).raises(Timeout::Error)
+
+    PlaidTransactionsRefreshJob.perform_now(@plaid_item)
+
+    assert_nil @plaid_item.reload.last_refresh_requested_at
+  end
+
   test "still polls after an ambiguous refresh request failure" do
     @provider.expects(:refresh_transactions).raises(Timeout::Error)
 
