@@ -1,6 +1,16 @@
-<%= render DS::Dialog.new do |dialog| %>
-  <% dialog.with_header(title: t(".title")) %>
-  <% dialog.with_body do %>
-    <%= render "vehicles/form", account: @account, url: vehicles_path(return_to: params[:return_to]) %>
+<% avm_provider_key = @avm_provider_key || params[:method] %>
+
+<% if @avm_preview.present? %>
+  <%= render "vehicles/avm_preview", account: @account, provider_key: @avm_provider_key, preview: @avm_preview, vehicle: @avm_vehicle %>
+<% elsif params[:step] == "method_select" && @avm_providers.present? %>
+  <%= render "vehicles/avm_method_selector", avm_providers: @avm_providers %>
+<% elsif avm_provider_key.present? && @avm_providers&.map(&:to_s)&.include?(avm_provider_key.to_s) %>
+  <%= render "vehicles/avm_form", account: @account, provider_key: avm_provider_key %>
+<% else %>
+  <%= render DS::Dialog.new do |dialog| %>
+    <% dialog.with_header(title: t(".title")) %>
+    <% dialog.with_body do %>
+      <%= render "vehicles/form", account: @account, url: vehicles_path(return_to: params[:return_to]) %>
+    <% end %>
   <% end %>
 <% end %>

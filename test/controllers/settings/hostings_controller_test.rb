@@ -14,6 +14,7 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
     Provider::Registry.stubs(:get_provider).with(:yahoo_finance).returns(@provider)
     Provider::Registry.stubs(:get_provider).with(:rentcast).returns(nil)
     Provider::Registry.stubs(:get_provider).with(:realie).returns(nil)
+    Provider::Registry.stubs(:get_provider).with(:cardog).returns(nil)
     @provider.stubs(:usage).returns(provider_success_response(
       OpenStruct.new(
         used: 10,
@@ -27,7 +28,7 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
   teardown do
     # These tests persist global Setting.* values; reset them so state can't
     # leak into later (order-dependent) tests.
-    %i[anthropic_access_token anthropic_base_url anthropic_model jev_api_key jev_endpoint jev_model llm_provider twelve_data_api_key openai_access_token openai_request_timeout ai_response_timeout external_assistant_url external_assistant_token external_assistant_model external_assistant_agent_id rentcast_api_key realie_api_key demo_family_refresh_enabled demo_family_refresh_family_id].each do |key|
+    %i[anthropic_access_token anthropic_base_url anthropic_model jev_api_key jev_endpoint jev_model llm_provider twelve_data_api_key openai_access_token openai_request_timeout ai_response_timeout external_assistant_url external_assistant_token external_assistant_model external_assistant_agent_id rentcast_api_key realie_api_key cardog_api_key demo_family_refresh_enabled demo_family_refresh_family_id].each do |key|
       Setting.public_send("#{key}=", nil)
     end
   end
@@ -159,6 +160,14 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
       patch settings_hosting_url, params: { setting: { rentcast_api_key: "rentcast-token" } }
 
       assert_equal "rentcast-token", Setting.rentcast_api_key
+    end
+  end
+
+  test "can update cardog api key when self hosting is enabled" do
+    with_self_hosting do
+      patch settings_hosting_url, params: { setting: { cardog_api_key: "cardog-token" } }
+
+      assert_equal "cardog-token", Setting.cardog_api_key
     end
   end
 
