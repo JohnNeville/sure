@@ -11,19 +11,21 @@ class ProviderRequestCount < ApplicationRecord
       Date.current.strftime("%Y-%m")
     end
 
-    # Atomically increments the counter and returns the new count.
-    def increment!(provider_key, period: current_period)
+    # Atomically increments the counter by `by` (default 1) and returns the
+    # new count. Credit-metered providers pass the cost of the call.
+    def increment!(provider_key, by: 1, period: current_period)
+      by = Integer(by)
       result = upsert(
-        { provider_key: provider_key, period: period, count: 1 },
+        { provider_key: provider_key, period: period, count: by },
         unique_by: %i[provider_key period],
-        on_duplicate: Arel.sql("count = provider_request_counts.count + 1, updated_at = CURRENT_TIMESTAMP"),
+        on_duplicate: Arel.sql(sanitize_sql_array([ "count = provider_request_counts.count + ?, updated_at = CURRENT_TIMESTAMP", by ])),
         returning: %w[count]
       )
       result.rows.first.first.to_i
     end
 
-    def decrement!(provider_key, period: current_period)
-      where(provider_key: provider_key, period: period).update_all("count = GREATEST(count - 1, 0)")
+    def decrement!(provider_key, by: 1, period: current_period)
+      where(provider_key: provider_key, period: period).update_all([ "count = GREATEST(count - ?, 0)", Integer(by) ])
     end
 
     def count_for(provider_key, period: current_period)
