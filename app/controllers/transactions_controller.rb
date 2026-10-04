@@ -161,6 +161,7 @@ class TransactionsController < ApplicationController
       @entry.sync_account_later
       @entry.lock_saved_attributes!
       @entry.mark_user_modified!
+      @entry.transaction.mark_reviewed!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
 
       respond_with_created_entry(@entry)
@@ -196,6 +197,7 @@ class TransactionsController < ApplicationController
 
       @entry.lock_saved_attributes!
       @entry.mark_user_modified!
+      @entry.transaction.mark_reviewed!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
       @entry.sync_account_later
 
@@ -260,6 +262,7 @@ class TransactionsController < ApplicationController
 
     @entry.lock_saved_attributes!
     @entry.mark_user_modified!
+    @entry.transaction.mark_reviewed!
     @entry.transaction.lock_attr!(:tag_ids)
     @entry.sync_account_later
 
@@ -715,7 +718,7 @@ class TransactionsController < ApplicationController
                 :start_date, :end_date, :search, :amount,
                 :amount_operator, :active_accounts_only,
                 accounts: [], account_ids: [],
-                categories: [], merchants: [], types: [], tags: [], status: [], ai_status: []
+                categories: [], merchants: [], types: [], tags: [], status: [], ai_status: [], reviewed: []
               )
               .to_h
               .compact_blank
@@ -725,6 +728,11 @@ class TransactionsController < ApplicationController
       if cleaned_params[:ai_status]
         cleaned_params[:ai_status] &= Transaction::Search::AI_STATUSES
         cleaned_params.delete(:ai_status) if cleaned_params[:ai_status].empty?
+      end
+
+      if cleaned_params[:reviewed]
+        cleaned_params[:reviewed] &= Transaction::Search::REVIEW_STATUSES
+        cleaned_params.delete(:reviewed) if cleaned_params[:reviewed].empty?
       end
 
       cleaned_params

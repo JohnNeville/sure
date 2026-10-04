@@ -216,6 +216,7 @@
             <%= icon "lock", size: "sm", class: "text-secondary" %>
           <% end %>
         <% end %>
+        <%= render "transactions/review_button", transaction: transaction %>
         <%= content_tag :p,
             transaction.transfer? && view_ctx == "global" ? "+/- #{format_money(entry.amount_money.abs)}" : format_money(-entry.amount_money),
             class: ["privacy-sensitive", "text-green-600": entry.amount.negative?] %>

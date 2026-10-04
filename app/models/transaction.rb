@@ -27,6 +27,21 @@ class Transaction < ApplicationRecord
 
   accepts_nested_attributes_for :taggings, allow_destroy: true
 
+  scope :reviewed, -> { where.not(reviewed_at: nil) }
+  scope :unreviewed, -> { where(reviewed_at: nil) }
+
+  def reviewed?
+    reviewed_at.present?
+  end
+
+  # Marks the transaction as reviewed (or, with `false`, as needing review
+  # again). Touches the entry because caches keyed on entries, such as the
+  # search result totals, would otherwise keep serving the old count.
+  def mark_reviewed!(reviewed = true)
+    update_columns(reviewed_at: reviewed ? Time.current : nil)
+    entry&.touch
+  end
+
   after_save :clear_merchant_unlinked_association, if: :merchant_id_previously_changed?
 
   # Accessors for exchange_rate stored in extra jsonb field

@@ -5,6 +5,9 @@ class Transaction::Search
   # Automatic-categorization provenance filter values (used by the view)
   AI_STATUSES = %w[current history].freeze
 
+  # Review state filter values (used by the view)
+  REVIEW_STATUSES = %w[reviewed unreviewed].freeze
+
   attribute :search, :string
   attribute :amount, :string
   attribute :amount_operator, :string
@@ -18,6 +21,7 @@ class Transaction::Search
   attribute :merchants, array: true
   attribute :tags, array: true
   attribute :ai_status, array: true
+  attribute :reviewed, array: true
   attribute :active_accounts_only, :boolean, default: true
 
   attr_reader :family, :accessible_account_ids
@@ -45,6 +49,7 @@ class Transaction::Search
       query = apply_merchant_filter(query, merchants)
       query = apply_tag_filter(query, tags)
       query = apply_ai_status_filter(query, ai_status)
+      query = apply_reviewed_filter(query, reviewed)
       query = EntrySearch.apply_search_filter(query, search)
       query = EntrySearch.apply_date_filters(query, start_date, end_date)
       query = EntrySearch.apply_amount_filter(query, amount, amount_operator)
@@ -238,6 +243,14 @@ class Transaction::Search
         query.joins(:tags).where(tags: { name: real_tags }).distinct.select(:id)
       end
       query.where(id: matching_ids)
+    end
+
+    # Filter by review state. Both values selected means no filter.
+    def apply_reviewed_filter(query, states)
+      wanted = Array(states) & REVIEW_STATUSES
+      return query if wanted.empty? || wanted.sort == REVIEW_STATUSES.sort
+
+      wanted == [ "reviewed" ] ? query.reviewed : query.unreviewed
     end
 
     # Filter by automatic-categorization provenance. Uses EXISTS so a

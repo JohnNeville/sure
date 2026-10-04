@@ -30,4 +30,15 @@ class TransactionCategoriesControllerTest < ActionDispatch::IntegrationTest
     assert_nil @transaction.reload.category_id
     assert_nil category.reload.last_used_at
   end
+
+  test "assigning a category marks the transaction reviewed and refreshes its review button" do
+    assert_not @transaction.reviewed?
+
+    patch transaction_category_url(@entry),
+      params: { entry: { entryable_type: "Transaction", entryable_attributes: { id: @transaction.id, category_id: categories(:income).id } } },
+      as: :turbo_stream
+
+    assert @transaction.reload.reviewed?
+    assert_match "review_transaction_#{@transaction.id}", response.body
+  end
 end

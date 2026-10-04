@@ -1736,6 +1736,64 @@ end
     assert_no_match(/ai_status/, response.location)
   end
 
+  test "editing a transaction marks it reviewed" do
+    entry = entries(:transaction)
+    assert_not entry.transaction.reviewed?
+
+    patch transaction_url(entry), params: { entry: { name: "Renamed", entryable_type: "Transaction", entryable_attributes: { id: entry.entryable_id, category_id: categories(:income).id } } }
+
+    assert entry.transaction.reload.reviewed?
+  end
+
+  test "changing tags marks a transaction reviewed" do
+    entry = entries(:transaction)
+
+    patch tags_transaction_url(entry, format: :json), params: { tag_ids: [ tags(:one).id ] }
+
+    assert entry.transaction.reload.reviewed?
+  end
+
+  test "creating a transaction marks it reviewed" do
+    assert_difference -> { Transaction.reviewed.count }, 1 do
+      post transactions_url, params: {
+        entry: {
+          account_id: accounts(:depository).id, name: "Coffee", date: Date.current, amount: 5, currency: "USD",
+          nature: "outflow", entryable_type: "Transaction", entryable_attributes: { category_id: categories(:food_and_drink).id }
+        }
+      }
+    end
+  end
+
+  test "index offers and applies the review filters" do
+    reviewed = entries(:transaction)
+    reviewed.transaction.mark_reviewed!
+
+    get transactions_url(q: { reviewed: [ "unreviewed" ] })
+
+    assert_response :success
+    assert_select "#entry_#{reviewed.id}", count: 0
+    assert_select "li", text: /Not reviewed/
+  end
+
+  test "index ignores unknown review filter values" do
+    get transactions_url(q: { reviewed: [ "bogus" ] })
+
+    assert_response :success
+  end
+
+  test "rows show a review button reflecting their state" do
+    entry = entries(:transaction)
+
+    get transactions_url
+
+    assert_select "##{ActionView::RecordIdentifier.dom_id(entry.transaction, :review)} button[aria-pressed=false]"
+
+    entry.transaction.mark_reviewed!
+    get transactions_url
+
+    assert_select "##{ActionView::RecordIdentifier.dom_id(entry.transaction, :review)} button[aria-pressed=true]"
+  end
+
   private
     def rendered_entry_ids
       css_select("turbo-frame[id^='entry_']").map { |node| node["id"].delete_prefix("entry_") }

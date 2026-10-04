@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_03_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_04_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -2740,6 +2740,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_03_140000) do
     t.string "kind", default: "standard", null: false
     t.jsonb "locked_attributes", default: {}
     t.uuid "merchant_id"
+    t.datetime "reviewed_at"
     t.uuid "transfer_id"
     t.datetime "updated_at", null: false
     t.index "(((extra -> 'goal'::text) ->> 'pledge_id'::text))", name: "ix_transactions_extra_goal_pledge_id", unique: true, where: "(((extra -> 'goal'::text) ->> 'pledge_id'::text) IS NOT NULL)"
@@ -2749,6 +2750,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_03_140000) do
     t.index ["investment_activity_label"], name: "index_transactions_on_investment_activity_label"
     t.index ["kind"], name: "index_transactions_on_kind"
     t.index ["merchant_id"], name: "index_transactions_on_merchant_id"
+    t.index ["reviewed_at"], name: "index_transactions_on_unreviewed", where: "(reviewed_at IS NULL)"
     t.index ["transfer_id"], name: "index_transactions_on_transfer_id"
   end
 

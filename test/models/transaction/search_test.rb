@@ -1120,4 +1120,36 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     assert_equal [ tx.id ], history_ids
     assert_empty current_ids
   end
+
+  test "reviewed filter splits reviewed and unreviewed transactions" do
+    reviewed_entry = create_transaction(account: @checking_account, amount: 10, name: "Reviewed one")
+    reviewed_entry.entryable.mark_reviewed!
+    unreviewed_entry = create_transaction(account: @checking_account, amount: 20, name: "Unreviewed one")
+
+    reviewed_ids = Transaction::Search.new(@family, filters: { reviewed: [ "reviewed" ] }).transactions_scope.pluck(:id)
+    unreviewed_ids = Transaction::Search.new(@family, filters: { reviewed: [ "unreviewed" ] }).transactions_scope.pluck(:id)
+
+    assert_equal [ reviewed_entry.entryable_id ], reviewed_ids
+    assert_equal [ unreviewed_entry.entryable_id ], unreviewed_ids
+  end
+
+  test "reviewed filter with both values or neither does not filter" do
+    create_transaction(account: @checking_account, amount: 10).entryable.mark_reviewed!
+    create_transaction(account: @checking_account, amount: 20)
+
+    both = Transaction::Search.new(@family, filters: { reviewed: [ "reviewed", "unreviewed" ] }).transactions_scope.count
+    none = Transaction::Search.new(@family, filters: {}).transactions_scope.count
+    unknown = Transaction::Search.new(@family, filters: { reviewed: [ "bogus" ] }).transactions_scope.count
+
+    assert_equal 2, both
+    assert_equal 2, none
+    assert_equal 2, unknown
+  end
+
+  test "reviewed filter changes the totals cache key" do
+    with = Transaction::Search.new(@family, filters: { reviewed: [ "reviewed" ] })
+    without = Transaction::Search.new(@family, filters: {})
+
+    assert_not_equal with.cache_key_base, without.cache_key_base
+  end
 end
