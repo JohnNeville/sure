@@ -211,8 +211,97 @@ class PlaidItemTest < ActiveSupport::TestCase
     end
   end
 
+  test "refresh interval defaults to always" do
+    assert_predicate PlaidItem.new, :refresh_always?
+    assert_predicate @plaid_item, :refresh_due?
+  end
+
+  test "refresh_due? is always true for always and never true for never" do
+    @plaid_item.update!(last_refresh_requested_at: Time.current)
+
+    @plaid_item.update!(refresh_interval: "always")
+    assert_predicate @plaid_item, :refresh_due?
+
+    @plaid_item.update!(refresh_interval: "never")
+    assert_not @plaid_item.refresh_due?
+
+    @plaid_item.update!(last_refresh_requested_at: nil)
+    assert_not @plaid_item.refresh_due?
+  end
+
+  test "refresh_due? compares calendar days for timed intervals" do
+    travel_to Time.zone.local(2026, 10, 15, 1, 0, 0) do
+      { "daily" => 1, "weekly" => 7, "monthly" => 30 }.each do |interval, days|
+        @plaid_item.update!(refresh_interval: interval)
+
+        @plaid_item.update!(last_refresh_requested_at: nil)
+        assert_predicate @plaid_item, :refresh_due?, "#{interval} is due when never requested"
+
+        # Requested a little less than the interval ago, but on an earlier
+        # calendar day than the cutoff: still not due.
+        @plaid_item.update!(last_refresh_requested_at: (days - 1).days.ago)
+        assert_not @plaid_item.refresh_due?, "#{interval} is not due before #{days} days have passed"
+
+        # A refresh that landed a few seconds later in the day than tonight's
+        # sync still counts as due once the days have passed.
+        @plaid_item.update!(last_refresh_requested_at: days.days.ago + 10.seconds)
+        assert_predicate @plaid_item, :refresh_due?, "#{interval} is due after #{days} days"
+
+        @plaid_item.update!(last_refresh_requested_at: (days + 5).days.ago)
+        assert_predicate @plaid_item, :refresh_due?, "#{interval} is due when well overdue"
+      end
+    end
+  end
+
+  test "rejects an unknown refresh interval" do
+    @plaid_item.refresh_interval = "hourly"
+
+    assert_not @plaid_item.valid?
+    assert @plaid_item.errors.of_kind?(:refresh_interval, :inclusion)
+  end
+
+  test "automatic sync skips the refresh when the interval says it is not due" do
+    @plaid_item.update!(refresh_interval: "weekly", last_refresh_requested_at: 1.day.ago)
+    @plaid_item.stubs(:shared_transactions_refresh_cache?).returns(true)
+
+    Rails.cache.expects(:write).never
+    assert_no_enqueued_jobs only: PlaidTransactionsRefreshJob do
+      @plaid_item.request_transactions_refresh_later
+    end
+    assert_in_delta 1.day.ago.to_f, @plaid_item.reload.last_refresh_requested_at.to_f, 5
+  end
+
+  test "automatic sync requests the refresh when the interval says it is due" do
+    @plaid_item.update!(refresh_interval: "weekly", last_refresh_requested_at: 8.days.ago)
+    @plaid_item.stubs(:shared_transactions_refresh_cache?).returns(true)
+    Rails.cache.stubs(:write).returns(true)
+
+    assert_enqueued_with(job: PlaidTransactionsRefreshJob, args: [ @plaid_item ]) do
+      @plaid_item.request_transactions_refresh_later
+    end
+  end
+
+  test "never interval skips automatic refreshes" do
+    @plaid_item.update!(refresh_interval: "never")
+    @plaid_item.stubs(:shared_transactions_refresh_cache?).returns(true)
+
+    assert_no_enqueued_jobs only: PlaidTransactionsRefreshJob do
+      @plaid_item.request_transactions_refresh_later
+    end
+  end
+
+  test "forced refresh ignores the interval" do
+    @plaid_item.update!(refresh_interval: "never", last_refresh_requested_at: Time.current)
+    @plaid_item.stubs(:shared_transactions_refresh_cache?).returns(true)
+    Rails.cache.stubs(:write).returns(true)
+
+    assert_enqueued_with(job: PlaidTransactionsRefreshJob, args: [ @plaid_item ]) do
+      @plaid_item.request_transactions_refresh_later(force: true)
+    end
+  end
+
   test "user sync preserves follow-up sync while requesting provider refresh" do
-    @plaid_item.expects(:request_transactions_refresh_later).once
+    @plaid_item.expects(:request_transactions_refresh_later).with(force: true).once
     @plaid_item.expects(:sync_later_with_follow_up).once
 
     @plaid_item.sync_later_with_provider_refresh

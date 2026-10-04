@@ -273,8 +273,11 @@ class Family < ApplicationRecord
   # refresh is asynchronous, and its polling chain schedules a distinct item
   # sync after the cursor advances (or after the bounded polling fallback), so
   # fresh transactions are imported even if the baseline family sync runs first.
-  def request_plaid_transactions_refreshes_later(source:)
-    enqueued_job = PlaidTransactionsRefreshAllJob.perform_later(self, source: source)
+  #
+  # Items honor their refresh interval unless `force` is set, which user-initiated
+  # syncs use.
+  def request_plaid_transactions_refreshes_later(source:, force: false)
+    enqueued_job = PlaidTransactionsRefreshAllJob.perform_later(self, source: source, force: force)
     return enqueued_job if enqueued_job
 
     capture_plaid_refresh_enqueue_failure(source:, error_class: "ActiveJob::EnqueueError")

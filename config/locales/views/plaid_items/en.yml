@@ -5,6 +5,9 @@ en:
       success: Account linked successfully.  Please wait for accounts to sync.
     destroy:
       success: Accounts scheduled for deletion.
+    update:
+      failure: Could not update the refresh interval.
+      success: Refresh interval updated.
     errors:
       link_token_generic: We couldn't open Plaid right now. Please try again, and
         if the problem persists check the server logs for details.
@@ -26,6 +29,18 @@ en:
         institution.
       no_accounts_title: No accounts found
       provider_name: Plaid
+      refresh_interval:
+        description: How often automatic syncs may ask Plaid to refresh this
+          connection's transactions, which Plaid may bill per request. Plaid also
+          refreshes on its own schedule, and syncing from Sure always asks for a
+          refresh.
+        label: Max update interval for billable refreshes
+        options:
+          always: Always
+          daily: Daily
+          monthly: Monthly
+          never: Never
+          weekly: Weekly
       requires_update: Reconnect
       status: Last synced %{timestamp} ago
       status_never: Requires data sync

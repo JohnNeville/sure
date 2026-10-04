@@ -9,6 +9,13 @@ class PlaidItem < ApplicationRecord
   enum :plaid_region, { us: "us", eu: "eu" }
   enum :status, { good: "good", requires_update: "requires_update" }, default: :good
 
+  # How often a sync may request Plaid's billable transactions refresh. Plaid
+  # refreshes its own data on a schedule regardless, so a longer interval only
+  # trades freshness for fewer billed refresh calls.
+  enum :refresh_interval,
+    { always: "always", daily: "daily", weekly: "weekly", monthly: "monthly", never: "never" },
+    default: :always, prefix: :refresh, validate: true
+
   # Encrypt sensitive credentials and raw payloads if ActiveRecord encryption is configured
   if encryption_ready?
     encrypts :access_token, deterministic: true
@@ -33,6 +40,11 @@ class PlaidItem < ApplicationRecord
   scope :needs_update, -> { where(status: :requires_update) }
 
   TRANSACTIONS_REFRESH_COOLDOWN = 5.minutes
+
+  # Calendar days that must pass between billable refreshes. Compared by date
+  # rather than elapsed time so a nightly sync that fires a few seconds before
+  # the previous night's refresh still counts as due.
+  REFRESH_INTERVAL_DAYS = { "daily" => 1, "weekly" => 7, "monthly" => 30 }.freeze
 
   # Get accounts from both new and legacy systems
   def accounts
@@ -83,8 +95,28 @@ class PlaidItem < ApplicationRecord
     PlaidFollowUpSyncJob.set(wait: PlaidFollowUpSyncJob::RETRY_DELAY).perform_later(self, active_sync_id: active_sync.id)
   end
 
-  def request_transactions_refresh_later
+  # Whether the refresh interval allows requesting another billable refresh.
+  def refresh_due?
+    return true if refresh_always?
+    return false if refresh_never?
+
+    last_refresh_requested_at.nil? ||
+      last_refresh_requested_at.to_date <= Date.current - REFRESH_INTERVAL_DAYS.fetch(refresh_interval)
+  end
+
+  # Automatic syncs honor the refresh interval; pass `force: true` for syncs
+  # the user asked for, which always request a refresh.
+  def request_transactions_refresh_later(force: false)
     return unless supports_product?("transactions")
+
+    unless force || refresh_due?
+      Rails.logger.info(
+        "Skipping Plaid transactions refresh for item #{id}: refresh interval is #{refresh_interval}, " \
+        "last requested #{last_refresh_requested_at&.iso8601 || "never"}"
+      )
+      return
+    end
+
     return unless shared_transactions_refresh_cache?
 
     refresh_requested = Rails.cache.write(
@@ -106,8 +138,9 @@ class PlaidItem < ApplicationRecord
     Rails.cache.delete(transactions_refresh_cache_key) unless enqueued_job
   end
 
+  # Used for user-initiated syncs, so the refresh interval is bypassed.
   def sync_later_with_provider_refresh
-    request_transactions_refresh_later
+    request_transactions_refresh_later(force: true)
     sync_later_with_follow_up
   end
 

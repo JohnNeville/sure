@@ -3,9 +3,9 @@ class PlaidItemsController < ApplicationController
 
   connects_provider PlaidItem
 
-  before_action :set_plaid_item, only: %i[edit destroy sync]
+  before_action :set_plaid_item, only: %i[edit update destroy sync]
   before_action :require_connector_create!, only: %i[new create select_existing_account link_existing_account]
-  before_action :require_connector_manage!, only: %i[edit destroy sync]
+  before_action :require_connector_manage!, only: %i[edit update destroy sync]
 
   def new
     region = params[:region] == "eu" ? :eu : :us
@@ -41,6 +41,14 @@ class PlaidItemsController < ApplicationController
     )
 
     redirect_to accounts_path, notice: t(".success")
+  end
+
+  def update
+    if @plaid_item.update(refresh_interval_params)
+      redirect_back_or_to accounts_path, notice: t(".success"), status: :see_other
+    else
+      redirect_back_or_to accounts_path, alert: t(".failure"), status: :see_other
+    end
   end
 
   def destroy
@@ -119,6 +127,10 @@ class PlaidItemsController < ApplicationController
 
     def plaid_item_params
       params.require(:plaid_item).permit(:public_token, :region, metadata: {})
+    end
+
+    def refresh_interval_params
+      params.require(:plaid_item).permit(:refresh_interval)
     end
 
     def item_name
