@@ -37,6 +37,12 @@ sync_property_valuations:
   queue: "scheduled"
   description: "Refreshes AVM property valuations once a month (providers enforce tight monthly request caps)"
 
+sync_vehicle_valuations:
+  cron: "45 1 1 * *" # monthly on the 1st at 1:45 AM
+  class: "SyncVehicleValuationsJob"
+  queue: "scheduled"
+  description: "Refreshes vehicle valuations once a month (providers enforce tight monthly credit caps)"
+
 clean_data:
   cron: "0 3 * * *" # daily at 3:00 AM
   class: "DataCleanerJob"

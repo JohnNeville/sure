@@ -1,6 +1,8 @@
 ---
 en:
   vehicles:
+    avm_providers:
+      cardog: Cardog
     edit:
       edit: Edit %{account}
     form:
@@ -17,6 +19,16 @@ en:
       mileage_unit_miles: Miles
     new:
       title: Enter vehicle details
+      avm_option: "Add via %{provider}"
+      avm_title: "Add vehicle via %{provider}"
+      avm_description: "Enter a name, year, make and model. %{provider} will estimate the vehicle's market value from live listings."
+      avm_us_only: "%{provider} covers the US market. The estimate is the median asking price for the year, make and model, and does not account for mileage or condition."
+      avm_submit: "Look up vehicle"
+      avm_preview_title: "Confirm vehicle value"
+      avm_preview_description: "Here's what %{provider} found. Review the estimate before adding the vehicle — nothing has been created yet."
+      avm_preview_back: "Back"
+      avm_preview_confirm: "Add vehicle"
+      avm_preview_market_value: "Market price estimate"
     overview:
       current_price: Current Price
       make_model: Make & Model

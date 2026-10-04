@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_29_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_03_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -2860,6 +2860,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_29_120000) do
   end
 
   create_table "vehicles", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.date "avm_last_synced_on"
+    t.string "avm_provider"
     t.datetime "created_at", null: false
     t.jsonb "locked_attributes", default: {}
     t.string "make"
@@ -2869,6 +2871,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_29_120000) do
     t.string "subtype"
     t.datetime "updated_at", null: false
     t.integer "year"
+    t.index ["avm_last_synced_on"], name: "index_vehicles_on_avm_provider_sync", order: "NULLS FIRST", where: "(avm_provider IS NOT NULL)"
+    t.check_constraint "avm_provider IS NULL OR avm_provider::text = 'cardog'::text", name: "vehicles_avm_provider_check"
   end
 
   create_table "webauthn_credentials", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

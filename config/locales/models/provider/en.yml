@@ -5,6 +5,16 @@ en:
       not_configured: This property data provider is not configured.
       missing_fields: Please provide a name and a complete US address (street, city, state, and ZIP code).
       preview_expired: This property preview has expired — please look up the address again.
+    vehicle_valuation:
+      not_configured: This vehicle valuation provider is not configured.
+      missing_fields: Please provide a name, year, make, and model.
+      preview_expired: This vehicle preview has expired — please look up the vehicle again.
+    cardog:
+      errors:
+        insufficient_credits: Your Cardog account has no credits left.
+        no_valuation: Cardog did not return a price estimate for this vehicle.
+        not_found: Cardog could not find a vehicle matching this year, make and model.
+        unauthorized: Cardog rejected the API key. Check that it is correct.
     rentcast:
       errors:
         no_valuation: RentCast did not return a value estimate for this address.
