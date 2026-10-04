@@ -1944,6 +1944,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_090001) do
     t.string "institution_color"
     t.string "institution_id"
     t.string "institution_url"
+    t.datetime "last_refresh_requested_at"
     t.string "name"
     t.string "next_cursor"
     t.uuid "owner_id"
@@ -1951,6 +1952,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_090001) do
     t.string "plaid_region", default: "us", null: false
     t.jsonb "raw_institution_payload", default: {}
     t.jsonb "raw_payload", default: {}
+    t.string "refresh_interval", default: "always", null: false
     t.boolean "scheduled_for_deletion", default: false
     t.string "status", default: "good", null: false
     t.datetime "updated_at", null: false
