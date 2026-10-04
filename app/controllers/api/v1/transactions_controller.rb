@@ -12,6 +12,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
   before_action :ensure_write_scope, only: [ :create, :update, :destroy ]
   before_action :set_transaction, only: [ :show, :update, :destroy ]
   before_action :ensure_write_permission, only: [ :update, :destroy ]
+  before_action :validate_reviewed_param, only: [ :create, :update ]
 
   def index
     family = current_resource_owner.family
@@ -115,6 +116,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
       @entry.lock_saved_attributes!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
       @entry.mark_user_modified! if user_modified_requested?
+      apply_requested_review_state(@entry.transaction)
       @entry.sync_account_later
       @entry.apply_immediate_rules_later
 
@@ -184,6 +186,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
         @entry.sync_account_later if sync_needed
         @entry.lock_saved_attributes!
         @entry.mark_user_modified! if user_modified_requested?
+        apply_requested_review_state(@entry.transaction)
 
         @transaction = @entry.transaction
         updated = true
@@ -260,7 +263,8 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     # included), so they cannot widen what an annotate-tier member changes.
     def annotate_only_update?
       transaction_params.except(
-        *AccountShare::ANNOTATE_ENTRY_ATTRIBUTES, *AccountShare::ANNOTATE_TRANSACTION_ATTRIBUTES
+        *AccountShare::ANNOTATE_ENTRY_ATTRIBUTES, *AccountShare::ANNOTATE_TRANSACTION_ATTRIBUTES,
+        :reviewed # annotate tiers may mark rows reviewed, as in the web app
       ).empty?
     end
 
@@ -331,6 +335,16 @@ class Api::V1::TransactionsController < Api::V1::BaseController
         )
       end
 
+      # Review state filtering
+      if params[:reviewed].present?
+        case params[:reviewed].to_s.downcase
+        when "true", "1"
+          query = query.reviewed
+        when "false", "0"
+          query = query.unreviewed
+        end
+      end
+
       # Transaction type filtering (income/expense)
       if params[:type].present?
         case params[:type].downcase
@@ -360,8 +374,36 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     def transaction_params
       params.require(:transaction).permit(
         :date, :amount, :name, :description, :notes, :currency,
-        :category_id, :merchant_id, :nature, :user_modified, tag_ids: []
+        :category_id, :merchant_id, :nature, :user_modified, :reviewed, tag_ids: []
       )
+    end
+
+    REVIEWED_VALUES = %w[true false 1 0].freeze
+
+    # `reviewed` is opt-in, like `user_modified`: leaving it out never changes
+    # a transaction's review state, so API writes (a client importing or
+    # editing transactions) don't silently mark them reviewed.
+    def reviewed_requested
+      value = params.dig(:transaction, :reviewed)
+      return if value.nil? || value.to_s.empty?
+
+      ActiveModel::Type::Boolean.new.cast(value)
+    end
+
+    def apply_requested_review_state(transaction)
+      requested = reviewed_requested
+      transaction.mark_reviewed!(requested) unless requested.nil?
+    end
+
+    def validate_reviewed_param
+      value = params.dig(:transaction, :reviewed)
+      return if value.nil? || value.to_s.empty? || REVIEWED_VALUES.include?(value.to_s.downcase)
+
+      render json: {
+        error: "validation_failed",
+        message: "reviewed must be true or false",
+        errors: [ "reviewed must be true or false" ]
+      }, status: :unprocessable_entity
     end
 
     # An API client can opt a transaction it creates or updates into the
