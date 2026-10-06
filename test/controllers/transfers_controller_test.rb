@@ -20,6 +20,20 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     assert_no_match disabled_account.name, response.body
   end
 
+  test "show names the transaction recorded in each account" do
+    checking = accounts(:depository)
+    savings = accounts(:investment)
+    outflow = checking.entries.create!(name: "CHK withdrawal ref 1234", date: Date.current, amount: 40, currency: "USD", entryable: Transaction.new(kind: "funds_movement"))
+    inflow = savings.entries.create!(name: "Savings deposit ref 5678", date: Date.current, amount: -40, currency: "USD", entryable: Transaction.new(kind: "funds_movement"))
+    transfer = Transfer.create!(outflow_transaction: outflow.entryable, inflow_transaction: inflow.entryable, status: "pending")
+
+    get transfer_url(transfer)
+
+    assert_response :success
+    assert_select "dl", text: /Transaction\s*CHK withdrawal ref 1234/
+    assert_select "dl", text: /Transaction\s*Savings deposit ref 5678/
+  end
+
   test "can create transfers" do
     assert_difference "Transfer.count", 1 do
       post transfers_url, params: {
