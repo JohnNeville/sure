@@ -2239,6 +2239,34 @@ end
     assert_not_includes response.body, "action_type=set_transaction_category"
   end
 
+  test "index filters by whether transactions are excluded from reports" do
+    excluded, included = users(:family_admin).family.entries.transactions.reverse_chronological.first(2)
+    excluded.update_columns(excluded: true)
+    included.update_columns(excluded: false)
+
+    get transactions_url(q: { exclusion: [ "excluded" ] })
+    assert_response :success
+    assert_select "#entry_#{excluded.id}"
+    assert_select "#entry_#{included.id}", count: 0
+    assert_select "li", text: /Excluded from reports/
+
+    get transactions_url(q: { exclusion: [ "included" ] })
+    assert_select "#entry_#{included.id}"
+    assert_select "#entry_#{excluded.id}", count: 0
+  end
+
+  test "index treats both exclusion states as no filter and ignores unknown values" do
+    excluded = entries(:transaction)
+    excluded.update_columns(excluded: true)
+
+    get transactions_url(q: { exclusion: [ "excluded", "included" ] })
+    assert_select "#entry_#{excluded.id}"
+
+    get transactions_url(q: { exclusion: [ "bogus" ] })
+    assert_response :success
+    assert_select "#entry_#{excluded.id}"
+  end
+
   private
     # The Allocator's two-key advisory lock on this entry, held by this session.
     def entry_lock_held?(entry)
