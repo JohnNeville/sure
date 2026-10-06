@@ -17,9 +17,10 @@ en:
         notes_placeholder: Enter a note that will be applied to selected transactions
         overview: Overview
         review_label: Review status
-        review_prompt: Reviewed when edited
         review_reviewed: Reviewed
+        review_unchanged: No change
         review_unreviewed: Not reviewed
+        review_when_edited: Review when edited
         save: Save
         tags_label: Tags
         transactions_section: Transactions
