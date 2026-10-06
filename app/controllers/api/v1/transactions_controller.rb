@@ -7,6 +7,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
   before_action :ensure_read_scope, only: [ :index, :show ]
   before_action :ensure_write_scope, only: [ :create, :update, :destroy ]
   before_action :set_transaction, only: [ :show, :update, :destroy ]
+  before_action :validate_excluded_param, only: [ :create, :update ]
 
   def index
     family = current_resource_owner.family
@@ -285,6 +286,16 @@ class Api::V1::TransactionsController < Api::V1::BaseController
         )
       end
 
+      # Whether the transaction counts toward budgets and reports
+      if params[:excluded].present?
+        case params[:excluded].to_s.downcase
+        when "true", "1"
+          query = query.where(entries: { excluded: true })
+        when "false", "0"
+          query = query.where(entries: { excluded: false })
+        end
+      end
+
       # Transaction type filtering (income/expense)
       if params[:type].present?
         case params[:type].downcase
@@ -312,8 +323,30 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     def transaction_params
       params.require(:transaction).permit(
         :date, :amount, :name, :description, :notes, :currency,
-        :category_id, :merchant_id, :nature, :user_modified, tag_ids: []
+        :category_id, :merchant_id, :nature, :user_modified, :excluded, tag_ids: []
       )
+    end
+
+    EXCLUDED_VALUES = %w[true false 1 0].freeze
+
+    # `excluded` is opt-in: leaving it out never changes whether a transaction
+    # counts toward budgets and reports.
+    def excluded_requested
+      value = params.dig(:transaction, :excluded)
+      return if value.nil? || value.to_s.empty?
+
+      ActiveModel::Type::Boolean.new.cast(value)
+    end
+
+    def validate_excluded_param
+      value = params.dig(:transaction, :excluded)
+      return if value.nil? || value.to_s.empty? || EXCLUDED_VALUES.include?(value.to_s.downcase)
+
+      render json: {
+        error: "validation_failed",
+        message: "excluded must be true or false",
+        errors: [ "excluded must be true or false" ]
+      }, status: :unprocessable_entity
     end
 
     # An API client can opt a transaction it creates or updates into the
@@ -337,6 +370,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
         amount: calculate_signed_amount,
         currency: transaction_params[:currency] || current_resource_owner.family.currency,
         notes: transaction_params[:notes],
+        excluded: excluded_requested,
         entryable_type: "Transaction",
         entryable_attributes: {
           category_id: transaction_params[:category_id],
@@ -357,6 +391,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
         name: transaction_params[:name] || transaction_params[:description],
         date: transaction_params[:date],
         notes: transaction_params[:notes],
+        excluded: excluded_requested,
         entryable_attributes: {
           id: @entry.entryable_id,
           category_id: transaction_params[:category_id],

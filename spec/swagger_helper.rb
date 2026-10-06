@@ -891,6 +891,7 @@ RSpec.configure do |config|
               external_id: { type: :string, nullable: true },
               source: { type: :string, nullable: true },
               user_modified: { type: :boolean },
+              excluded: { type: :boolean, description: 'Whether the transaction is excluded from budgets and reports' },
               classification: { type: :string },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },

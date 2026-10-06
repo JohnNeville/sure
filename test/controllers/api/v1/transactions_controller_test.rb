@@ -894,6 +894,103 @@ end
     assert_empty queries.grep(/SELECT "accounts"\.\* FROM "accounts" WHERE "accounts"\."id" =/)
   end
 
+  test "should include the excluded flag in transaction responses" do
+    get api_v1_transaction_url(@transaction), headers: api_headers(@api_key)
+
+    assert_response :success
+    assert_equal false, JSON.parse(response.body)["excluded"]
+
+    @transaction.entry.update_columns(excluded: true)
+    get api_v1_transaction_url(@transaction), headers: api_headers(@api_key)
+
+    assert_equal true, JSON.parse(response.body)["excluded"]
+  end
+
+  test "should filter transactions by exclusion from reports" do
+    @family.entries.update_all(excluded: false)
+    @transaction.entry.update_columns(excluded: true)
+
+    get api_v1_transactions_url, params: { excluded: true }, headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal [ @transaction.id ], JSON.parse(response.body)["transactions"].map { |row| row["id"] }
+
+    get api_v1_transactions_url, params: { excluded: false }, headers: api_headers(@api_key)
+    included_ids = JSON.parse(response.body)["transactions"].map { |row| row["id"] }
+    assert_not_includes included_ids, @transaction.id
+    assert_equal @family.transactions.joins(:entry).where(entries: { excluded: false }).count, included_ids.size
+  end
+
+  test "should create a transaction excluded from reports when requested and included by default" do
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: @account.id, name: "Excluded import", amount: 10, date: Date.current, currency: "USD", nature: "expense", excluded: true } },
+         headers: api_headers(@api_key)
+    assert_response :created
+    assert_equal true, JSON.parse(response.body)["excluded"]
+
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: @account.id, name: "Normal import", amount: 10, date: Date.current, currency: "USD", nature: "expense" } },
+         headers: api_headers(@api_key)
+    assert_response :created
+    assert_equal false, JSON.parse(response.body)["excluded"]
+  end
+
+  test "should update the excluded flag only when requested" do
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { excluded: true } },
+        headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal true, JSON.parse(response.body)["excluded"]
+    assert @transaction.entry.reload.excluded?
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { name: "Renamed" } },
+        headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal true, JSON.parse(response.body)["excluded"]
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { excluded: "false" } },
+        headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal false, JSON.parse(response.body)["excluded"]
+    assert_not @transaction.entry.reload.excluded?
+  end
+
+  test "should reject an invalid excluded value" do
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: @account.id, name: "Imported", amount: 10, date: Date.current, currency: "USD", excluded: "maybe" } },
+         headers: api_headers(@api_key)
+    assert_response :unprocessable_entity
+    assert_equal "excluded must be true or false", JSON.parse(response.body)["message"]
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { excluded: "maybe" } },
+        headers: api_headers(@api_key)
+    assert_response :unprocessable_entity
+    assert_not @transaction.entry.reload.excluded?
+  end
+
+  test "should not let a read-only key change the excluded flag" do
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { excluded: true } },
+        headers: api_headers(@read_only_api_key)
+
+    assert_response :forbidden
+    assert_not @transaction.entry.reload.excluded?
+  end
+
+  test "should not include a split parent back in reports through the API" do
+    entry = create_transaction(account: @account, amount: 50, name: "To split")
+    entry.split!([ { name: "Part A", amount: 30 }, { name: "Part B", amount: 20 } ])
+
+    put api_v1_transaction_url(entry.entryable),
+        params: { transaction: { excluded: false } },
+        headers: api_headers(@api_key)
+
+    assert_response :unprocessable_entity
+    assert entry.reload.excluded?
+  end
+
   private
 
     def api_headers(api_key)
