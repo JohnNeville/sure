@@ -1,0 +1,16 @@
+---
+en:
+  rejected_transfers:
+    destroy:
+      success: Rejection removed. Automatic matching can propose this pair again.
+    index:
+      amount: Amount
+      description: Transfer matches you rejected. Automatic matching never proposes these again. Restore one to let it be proposed again, or match it by hand.
+      empty: You haven't rejected any transfer matches.
+      inflow: Inflow
+      match: Match
+      outflow: Outflow
+      rejected_on: Rejected
+      restore: Restore
+      table_label: Rejected transfer matches
+      title: Rejected transfer matches
