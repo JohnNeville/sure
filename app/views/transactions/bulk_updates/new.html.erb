@@ -16,8 +16,13 @@
             <%= form.select :tag_ids, Current.family.tags.alphabetically.pluck(:name, :id), { include_blank: t(".none"), multiple: true, label: t(".tags_label"), include_hidden: false } %>
             <%= form.text_area :notes, label: t(".notes_label"), placeholder: t(".notes_placeholder"), rows: 5 %>
             <%= form.select :reviewed,
-                            [ [ t(".review_reviewed"), "true" ], [ t(".review_unreviewed"), "false" ] ],
-                            { include_blank: t(".review_prompt"), label: t(".review_label") } %>
+                            [
+                              [ t(".review_unchanged"), "unchanged" ],
+                              [ t(".review_when_edited"), "when_edited" ],
+                              [ t(".review_reviewed"), "true" ],
+                              [ t(".review_unreviewed"), "false" ]
+                            ],
+                            { selected: "unchanged", include_blank: false, label: t(".review_label") } %>
           </div>
         <% end %>
       </div>
