@@ -1,5 +1,5 @@
 <%# locals: (form:) %>
-<div data-controller="list-filter">
+<div data-controller="list-filter account-filter-groups">
   <%= render DS::SearchInput.new(
         variant: :embedded,
         placeholder: t(".filter_accounts"),
@@ -10,17 +10,41 @@
         }
       ) %>
   <div class="my-2" id="list" data-list-filter-target="list">
-    <% Current.user.accessible_accounts.alphabetically.each do |account| %>
-      <div class="filterable-item flex items-center gap-2 p-2" data-filter-name="<%= account.name %>">
-        <%= form.check_box :accounts,
-                           {
-                             multiple: true,
-                             checked: @q[:accounts]&.include?(account.name),
-                             class: "checkbox checkbox--light"
-                           },
-                           account.name,
-                           nil %>
-        <%= form.label :accounts, account.name, value: account.name, class: "text-sm text-primary" %>
+    <% grouped_filter_accounts(Current.user.accessible_accounts.alphabetically).each do |type, group_name, accounts| %>
+      <div data-filter-group>
+        <div class="flex items-center gap-2 p-2">
+          <%= check_box_tag nil, "1", false,
+                            id: "account_group_#{type.underscore}",
+                            class: "checkbox checkbox--light",
+                            aria: { label: t(".select_group", group: group_name) },
+                            data: {
+                              account_filter_groups_target: "group",
+                              group: type,
+                              action: "change->account-filter-groups#toggleGroup"
+                            } %>
+          <%= label_tag "account_group_#{type.underscore}", class: "text-sm font-medium text-primary cursor-pointer" do %>
+            <%= group_name %> <span class="text-secondary font-normal">(<%= accounts.size %>)</span>
+          <% end %>
+        </div>
+
+        <% accounts.each do |account| %>
+          <div class="filterable-item flex items-center gap-2 p-2 pl-8" data-filter-name="<%= account.name %>">
+            <%= form.check_box :accounts,
+                               {
+                                 multiple: true,
+                                 checked: @q[:accounts]&.include?(account.name),
+                                 class: "checkbox checkbox--light",
+                                 data: {
+                                   account_filter_groups_target: "account",
+                                   group: type,
+                                   action: "change->account-filter-groups#syncGroup"
+                                 }
+                               },
+                               account.name,
+                               nil %>
+            <%= form.label :accounts, account.name, value: account.name, class: "text-sm text-primary" %>
+          </div>
+        <% end %>
       </div>
     <% end %>
   </div>
