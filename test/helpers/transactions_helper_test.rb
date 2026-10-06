@@ -141,4 +141,29 @@ class TransactionsHelperTest < ActionView::TestCase
     assert_empty details[:provider_extras]
     assert_equal({ "someprovider" => { "a" => 1 } }, JSON.parse(details[:raw]))
   end
+
+  test "grouped_filter_accounts groups accounts by primary type in Sure's usual order" do
+    family = families(:dylan_family)
+    accounts = [
+      family.accounts.create!(name: "Zeta Card", accountable: CreditCard.new, balance: 10, currency: "USD"),
+      family.accounts.create!(name: "Beta Brokerage", accountable: Investment.new, balance: 10, currency: "USD"),
+      family.accounts.create!(name: "Alpha Checking", accountable: Depository.new, balance: 10, currency: "USD"),
+      family.accounts.create!(name: "Alpha Savings", accountable: Depository.new, balance: 10, currency: "USD")
+    ]
+
+    groups = grouped_filter_accounts(accounts)
+
+    assert_equal %w[Depository Investment CreditCard], groups.map(&:first)
+    assert_equal [ "Cash", "Investments", "Credit Cards" ], groups.map { |_type, name, _accounts| name }
+    assert_equal [ "Alpha Checking", "Alpha Savings" ], groups.first.last.map(&:name)
+  end
+
+  test "grouped_filter_accounts leaves out account types the user has none of" do
+    family = families(:dylan_family)
+    only_loans = [ family.accounts.create!(name: "House Loan", accountable: Loan.new, balance: 10, currency: "USD") ]
+
+    groups = grouped_filter_accounts(only_loans)
+
+    assert_equal %w[Loan], groups.map(&:first)
+  end
 end

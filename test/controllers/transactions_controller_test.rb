@@ -1736,6 +1736,32 @@ end
     assert_no_match(/ai_status/, response.location)
   end
 
+  test "the account filter lists accounts under a group checkbox for each account type" do
+    get transactions_url
+
+    assert_response :success
+    doc = Nokogiri::HTML(response.body)
+    filter = doc.at_css("[data-controller~='account-filter-groups']")
+    assert_not_nil filter
+
+    group_boxes = filter.css("input[data-account-filter-groups-target='group']")
+    assert_equal %w[Depository Investment], group_boxes.map { |box| box["data-group"] }.first(2)
+    assert group_boxes.none? { |box| box["name"].present? }, "group checkboxes are never submitted"
+
+    cash_accounts = filter.css("input[data-account-filter-groups-target='account'][data-group='Depository']")
+    assert_includes cash_accounts.map { |box| box["value"] }, accounts(:depository).name
+    assert cash_accounts.all? { |box| box["name"] == "q[accounts][]" }
+    assert_select "label[for=account_group_depository]", text: /Cash/
+  end
+
+  test "the account filter keeps the checked accounts from the query" do
+    get transactions_url(q: { accounts: [ accounts(:depository).name ] })
+
+    assert_response :success
+    assert_select "input[data-account-filter-groups-target='account'][value=?][checked]", accounts(:depository).name
+    assert_select "input[data-account-filter-groups-target='account'][checked]", count: 1
+  end
+
   private
     def rendered_entry_ids
       css_select("turbo-frame[id^='entry_']").map { |node| node["id"].delete_prefix("entry_") }

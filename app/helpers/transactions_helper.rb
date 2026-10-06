@@ -15,6 +15,22 @@ module TransactionsHelper
     ]
   end
 
+  # Accounts for the account filter, grouped by primary type in the order Sure
+  # lists account types everywhere else (cash, investments, ... then
+  # liabilities). Types without an account are left out.
+  #
+  # @param accounts [Enumerable<Account>] the accounts the user can see
+  # @return [Array<Array>] [type, plural display name, accounts] for each type present
+  def grouped_filter_accounts(accounts)
+    by_type = accounts.group_by(&:accountable_type)
+
+    Accountable::TYPES.filter_map do |type|
+      next unless by_type.key?(type)
+
+      [ type, Accountable.from_type(type).display_name, by_type[type] ]
+    end
+  end
+
   # @param filter [Hash] one entry from transaction_search_filters
   # @return [String] the partial that renders that filter's controls
   def get_transaction_search_filter_partial_path(filter)
