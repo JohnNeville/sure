@@ -223,6 +223,11 @@ class TransactionsController < ApplicationController
               partial: "entries/protection_indicator",
               locals: { entry: @entry, unlock_path: unlock_transaction_path(@entry.transaction) }
             ),
+            turbo_stream.replace(
+              dom_id(@entry.transaction, :review_status),
+              partial: "transactions/review_status",
+              locals: { transaction: @entry.transaction, can_annotate: can_annotate_entry? }
+            ),
             (turbo_stream.replace(
               dom_id(@entry, :notes),
               partial: "transactions/notes",

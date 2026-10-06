@@ -1781,6 +1781,77 @@ end
     assert_response :success
   end
 
+  test "clicking a row's review button marks the transaction reviewed" do
+    entry = entries(:transaction)
+    assert_not entry.transaction.reviewed?
+
+    get transactions_url
+    form = Nokogiri::HTML(response.body).at_css("##{ActionView::RecordIdentifier.dom_id(entry.transaction, :review)} form")
+    assert_not_nil form, "the row has a review button form"
+
+    # Submit what the browser would: the form's action with its hidden fields.
+    submitted = form.css("input[name]").to_h { |input| [ input["name"], input["value"] ] }.except("authenticity_token")
+    post form["action"], params: submitted, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+    assert_response :success
+    assert entry.transaction.reload.reviewed?
+    assert_match %r{<turbo-stream action="replace" target="#{ActionView::RecordIdentifier.dom_id(entry.transaction, :review)}"}, response.body
+  end
+
+  test "the details pane shows the review state" do
+    entry = entries(:transaction)
+    status = "##{ActionView::RecordIdentifier.dom_id(entry.transaction, :review_status)}"
+
+    get transaction_url(entry)
+
+    assert_response :success
+    assert_select status, text: /Not reviewed yet/
+    assert_select "#{status} input[type=checkbox][name=reviewed]:not([checked])"
+
+    entry.transaction.update_columns(reviewed_at: Time.zone.local(2026, 10, 4, 12))
+    get transaction_url(entry)
+
+    assert_select status, text: /Marked reviewed on October 04, 2026/
+    assert_select "#{status} input[type=checkbox][name=reviewed][checked]"
+  end
+
+  test "the details pane toggle marks the transaction reviewed and refreshes the pane and the row" do
+    entry = entries(:transaction)
+    get transaction_url(entry)
+    form = Nokogiri::HTML(response.body).at_css("##{ActionView::RecordIdentifier.dom_id(entry.transaction, :review_status)} form")
+    assert_not_nil form
+
+    post form["action"], params: { _method: "patch", reviewed: "true" }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+    assert_response :success
+    assert entry.transaction.reload.reviewed?
+    assert_match(/target="#{ActionView::RecordIdentifier.dom_id(entry.transaction, :review_status)}"/, response.body)
+    assert_match(/target="#{ActionView::RecordIdentifier.dom_id(entry.transaction, :review)}"/, response.body)
+  end
+
+  test "editing in the details pane refreshes its review status" do
+    entry = entries(:transaction)
+
+    patch transaction_url(entry), params: { entry: { name: "Renamed in pane", entryable_type: "Transaction", entryable_attributes: { id: entry.entryable_id } } },
+      headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+    assert_response :success
+    assert_match(/target="#{ActionView::RecordIdentifier.dom_id(entry.transaction, :review_status)}"/, response.body)
+    assert entry.transaction.reload.reviewed?
+  end
+
+  test "a read-only user sees the review state but cannot toggle it" do
+    entry = entries(:transaction)
+    member = users(:family_member)
+    entry.account.account_shares.find_or_initialize_by(user: member).update!(permission: "read_only")
+    sign_in member
+
+    get transaction_url(entry)
+
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(entry.transaction, :review_status)} input[type=checkbox][name=reviewed][disabled]"
+  end
+
   test "rows show a review button reflecting their state" do
     entry = entries(:transaction)
 

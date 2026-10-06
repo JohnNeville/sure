@@ -26,6 +26,10 @@ en:
     review_button:
       mark_reviewed: Mark as reviewed
       mark_unreviewed: Mark as not reviewed
+    review_status:
+      title: Reviewed
+      not_reviewed: Not reviewed yet
+      reviewed_on: Marked reviewed on %{date}
     unknown_name: Unknown transaction
     selection_bar:
       duplicate: Duplicate
