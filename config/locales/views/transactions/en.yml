@@ -26,9 +26,10 @@ en:
         reconciled_status_label: Reconciliation status
         transfer_fields_hint: For transfers, date and merchant stay unchanged. Category applies only to transfer outflows that allow it.
         review_label: Review status
-        review_prompt: Reviewed when edited
         review_reviewed: Reviewed
+        review_unchanged: No change
         review_unreviewed: Not reviewed
+        review_when_edited: Review when edited
         save: Save
         tags_label: Tags
         transactions_section: Transactions
