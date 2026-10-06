@@ -348,4 +348,30 @@ class RuleTest < ActiveSupport::TestCase
     assert_nil transaction_entry2.transaction.category,
       "Transaction on other account should not be categorized"
   end
+
+  test "rule can include previously excluded transactions again" do
+    excluded = create_transaction(date: Date.current, account: @account, merchant: @whole_foods_merchant)
+    excluded.update_columns(excluded: true)
+    other_excluded = create_transaction(date: Date.current, account: @account, merchant: nil)
+    other_excluded.update_columns(excluded: true)
+
+    rule = Rule.create!(
+      family: @family,
+      resource_type: "transaction",
+      effective_date: 1.day.ago.to_date,
+      conditions: [
+        Rule::Condition.new(condition_type: "compound", operator: "and", sub_conditions: [
+          Rule::Condition.new(condition_type: "transaction_merchant", operator: "=", value: @whole_foods_merchant.id),
+          Rule::Condition.new(condition_type: "transaction_excluded", operator: "=", value: "true")
+        ])
+      ],
+      actions: [ Rule::Action.new(action_type: "include_transaction") ]
+    )
+
+    assert_equal 1, rule.affected_resource_count
+    rule.apply
+
+    assert_not excluded.reload.excluded?
+    assert other_excluded.reload.excluded?
+  end
 end

@@ -101,6 +101,9 @@ en:
         pending: Pending
         success: Success
         failed: Failed
+    action_executors:
+      include_transaction:
+        label: Include in budgeting and reports
     clear_ai_cache:
       button: Reset AI cache
       confirm_title: Reset AI cache?
@@ -108,6 +111,11 @@ en:
       confirm_button: Reset Cache
       success: AI cache is being cleared. This may take a few moments.
     condition_filters:
+      transaction_excluded:
+        label: Excluded from budgeting and reports
+        'yes': 'Yes'
+        'no': 'No'
+        equal_to: Equal to
       transaction_type:
         income: Income
         expense: Expense

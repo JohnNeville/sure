@@ -10,6 +10,14 @@ class RulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "the rule form offers the excluded condition and the include action" do
+    get new_rule_url(resource_type: "transaction")
+
+    assert_response :success
+    assert_select "option[value='transaction_excluded']", text: "Excluded from budgeting and reports"
+    assert_select "option[value='include_transaction']", text: "Include in budgeting and reports"
+  end
+
   test "should get new with pre-filled name and action" do
     category = categories(:food_and_drink)
     get new_rule_url(
