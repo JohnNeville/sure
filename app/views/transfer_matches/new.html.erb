@@ -1,3 +1,5 @@
+<% rejected_entry_ids = @transfer_match_candidates.select(&:previously_rejected).flat_map { |pair| [ pair.inflow_transaction.entry.id, pair.outflow_transaction.entry.id ] } - [ @entry.id ] %>
+
 <%= render DS::Dialog.new do |dialog| %>
   <% dialog.with_header(title: t(".header.title"), subtitle: t(".header.subtitle")) %>
   <% dialog.with_body do %>
@@ -25,7 +27,7 @@
                 ) %>
           <% else %>
             <%= render "transfer_matches/matching_fields",
-                        form: f, entry: @entry, candidates: @transfer_match_candidates.map { |pm| pm.outflow_transaction.entry }, accounts: @accounts %>
+                        form: f, entry: @entry, candidates: @transfer_match_candidates.map { |pm| pm.outflow_transaction.entry }, accounts: @accounts, rejected_entry_ids: rejected_entry_ids %>
           <% end %>
         </div>
       </section>
@@ -52,7 +54,7 @@
                 ) %>
           <% else %>
             <%= render "transfer_matches/matching_fields",
-                        form: f, entry: @entry, candidates: @transfer_match_candidates.map { |pm| pm.inflow_transaction.entry }, accounts: @accounts %>
+                        form: f, entry: @entry, candidates: @transfer_match_candidates.map { |pm| pm.inflow_transaction.entry }, accounts: @accounts, rejected_entry_ids: rejected_entry_ids %>
           <% end %>
         </div>
       </section>
