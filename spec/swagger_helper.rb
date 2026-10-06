@@ -893,6 +893,7 @@ RSpec.configure do |config|
               user_modified: { type: :boolean },
               reviewed: { type: :boolean, description: 'Whether the transaction has been marked as reviewed' },
               reviewed_at: { type: :string, format: :'date-time', nullable: true, description: 'When the transaction was marked reviewed; null when it still needs review' },
+              excluded: { type: :boolean, description: 'Whether the transaction is excluded from budgets and reports' },
               classification: { type: :string },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },

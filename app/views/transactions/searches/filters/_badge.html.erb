@@ -57,6 +57,11 @@
       <%= icon("circle-check", size: "sm") %>
       <p><%= t(".#{param_value}") %></p>
     </div>
+  <% elsif param_key == "exclusion" %>
+    <div class="flex items-center gap-2 px-1">
+      <%= icon(param_value == "excluded" ? "eye-off" : "eye", size: "sm") %>
+      <p><%= t(".#{param_value}") %></p>
+    </div>
   <% elsif param_key == "ai_status" %>
     <div class="flex items-center gap-2 px-1">
       <%= icon(param_value == "current" ? "sparkles" : "history", size: "sm") %>

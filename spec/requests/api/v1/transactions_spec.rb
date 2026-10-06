@@ -131,6 +131,9 @@ RSpec.describe 'API V1 Transactions', type: :request do
       parameter name: :reviewed, in: :query, required: false,
                 description: 'Filter by review state: true for reviewed transactions, false for transactions that still need review',
                 schema: { type: :boolean }
+      parameter name: :excluded, in: :query, required: false,
+                description: 'Filter by whether transactions are excluded from budgets and reports: true for excluded, false for included',
+                schema: { type: :boolean }
 
       response '200', 'transactions listed' do
         schema '$ref' => '#/components/schemas/TransactionCollection'
@@ -150,6 +153,14 @@ RSpec.describe 'API V1 Transactions', type: :request do
         schema '$ref' => '#/components/schemas/TransactionCollection'
 
         let(:reviewed) { false }
+
+        run_test!
+      end
+
+      response '200', 'transactions filtered by exclusion from reports' do
+        schema '$ref' => '#/components/schemas/TransactionCollection'
+
+        let(:excluded) { true }
 
         run_test!
       end
@@ -189,6 +200,7 @@ RSpec.describe 'API V1 Transactions', type: :request do
               source: { type: :string, description: 'Optional source namespace for external_id. Requires external_id and defaults to api when external_id is provided' },
               user_modified: { type: :boolean, description: 'Whether provider syncs should preserve user-supplied transaction changes' },
               reviewed: { type: :boolean, description: 'Set the review state. Omit to leave a new transaction unreviewed' },
+              excluded: { type: :boolean, description: 'Whether the transaction is excluded from budgets and reports. Omit to leave it unchanged' },
               tag_ids: { type: :array, items: { type: :string, format: :uuid }, description: 'Array of tag IDs' }
             },
             required: %w[account_id date amount name]
@@ -335,7 +347,8 @@ RSpec.describe 'API V1 Transactions', type: :request do
                 description: 'Array of tag IDs to assign. Omit to preserve existing tags; use [] to clear all tags.'
               },
               user_modified: { type: :boolean, description: 'Whether provider syncs should preserve user-supplied transaction changes' },
-              reviewed: { type: :boolean, description: 'Set the review state. Omit to leave it unchanged' }
+              reviewed: { type: :boolean, description: 'Set the review state. Omit to leave it unchanged' },
+              excluded: { type: :boolean, description: 'Whether the transaction is excluded from budgets and reports. Omit to leave it unchanged' }
             }
           }
         }

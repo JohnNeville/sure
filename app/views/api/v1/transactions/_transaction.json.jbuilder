@@ -22,6 +22,7 @@ json.source transaction.entry.source
 json.user_modified transaction.entry.user_modified
 json.reviewed transaction.reviewed?
 json.reviewed_at transaction.reviewed_at&.iso8601
+json.excluded transaction.entry.excluded
 json.classification transaction.entry.classification
 
 # Account information

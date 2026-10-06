@@ -7,6 +7,10 @@ en:
         category_label: Category
         category_prompt: Select a category
         date_label: Date
+        excluded_exclude: Exclude from budgeting and reports
+        excluded_include: Include in budgeting and reports
+        excluded_label: Budgeting and reports
+        excluded_prompt: No change
         header_title: Edit transactions
         merchant_label: Merchant
         merchant_prompt: Select a merchant
@@ -282,6 +286,7 @@ en:
         merchant: Merchant
         ai: AI
         review: Review
+        exclusion: Budgets and reports
     convert_to_trade:
       title: Convert to Security Trade
       description: Convert this transaction into a trade with security details
@@ -354,6 +359,8 @@ en:
           ai_history: AI history
           reviewed: Reviewed
           unreviewed: Not reviewed
+          excluded: Excluded from reports
+          included: Included in reports
         ai_filter:
           current: AI
           current_description: Category is still the one assigned automatically (AI or Bayes).
@@ -369,6 +376,9 @@ en:
         review_filter:
           reviewed: Reviewed
           unreviewed: Not reviewed
+        exclusion_filter:
+          excluded: Excluded from reports
+          included: Included in reports
       menu:
         account_filter: Account
         amount_filter: Amount

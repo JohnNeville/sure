@@ -214,4 +214,58 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
 
     assert entry.transaction.reload.reviewed?
   end
+
+  test "the bulk edit form offers to include or exclude from reports, defaulting to no change" do
+    get new_transactions_bulk_update_url
+
+    assert_response :success
+    assert_select "select[name='bulk_update[excluded]'] option", count: 3
+    assert_select "select[name='bulk_update[excluded]'] option[value='']", text: "No change"
+    assert_select "select[name='bulk_update[excluded]'] option[value=true]", text: "Exclude from budgeting and reports"
+    assert_select "select[name='bulk_update[excluded]'] option[value=false]", text: "Include in budgeting and reports"
+  end
+
+  test "bulk edit excludes selected transactions from reports" do
+    entries = @user.family.entries.transactions.first(2)
+    entries.each { |entry| entry.update_columns(excluded: false) }
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: entries.map(&:id), excluded: "true" } }
+
+    assert_equal "2 transactions updated", flash[:notice]
+    entries.each do |entry|
+      assert entry.reload.excluded?
+      assert entry.locked?(:excluded), "the user's choice is locked against rules and syncs"
+      assert entry.user_modified?
+    end
+  end
+
+  test "bulk edit includes excluded transactions in reports again" do
+    entries = @user.family.entries.transactions.first(2)
+    entries.each { |entry| entry.update_columns(excluded: true) }
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: entries.map(&:id), excluded: "false" } }
+
+    assert_equal "2 transactions updated", flash[:notice]
+    entries.each { |entry| assert_not entry.reload.excluded? }
+  end
+
+  test "bulk edit leaves the excluded flag alone when it is not chosen" do
+    entry = @user.family.entries.transactions.first
+    entry.update_columns(excluded: true)
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], notes: "Just a note", excluded: "" } }
+
+    assert_equal "Just a note", entry.reload.notes
+    assert entry.excluded?
+  end
+
+  test "bulk edit can change the excluded flag together with other fields" do
+    entry = @user.family.entries.transactions.first
+    entry.update_columns(excluded: true)
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], notes: "Back in", excluded: "false" } }
+
+    assert_equal "Back in", entry.reload.notes
+    assert_not entry.excluded?
+  end
 end

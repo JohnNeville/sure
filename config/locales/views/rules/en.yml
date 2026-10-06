@@ -104,6 +104,8 @@ en:
     action_executors:
       mark_transaction_reviewed:
         label: Mark as reviewed
+      include_transaction:
+        label: Include in budgeting and reports
     clear_ai_cache:
       button: Reset AI cache
       confirm_title: Reset AI cache?
@@ -115,6 +117,10 @@ en:
         label: Review status
         reviewed: Reviewed
         unreviewed: Not reviewed
+      transaction_excluded:
+        label: Excluded from budgeting and reports
+        'yes': 'Yes'
+        'no': 'No'
         equal_to: Equal to
       transaction_type:
         income: Income

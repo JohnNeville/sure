@@ -537,7 +537,10 @@ class Entry < ApplicationRecord
       when "false" then :unreviewed
       else :when_edited
       end
-      has_updates = bulk_attributes.present? || update_tags || review_mode.in?(%i[reviewed unreviewed])
+      # `false` counts as blank, so the exclusion flag can't ride along with
+      # the attributes above: "include in reports" would be silently dropped.
+      excluded = ActiveModel::Type::Boolean.new.cast(bulk_update_params[:excluded]) if bulk_update_params[:excluded].present?
+      has_updates = bulk_attributes.present? || update_tags || review_mode.in?(%i[reviewed unreviewed]) || !excluded.nil?
 
       return 0 unless has_updates
 
@@ -549,10 +552,11 @@ class Entry < ApplicationRecord
           changed = false
 
           # Update standard attributes
-          if bulk_attributes.present?
+          if bulk_attributes.present? || !excluded.nil?
             attrs = bulk_attributes.dup
             attrs.delete(:date) if entry.split_child?
             attrs.delete(:entryable_attributes) unless entry.transaction?
+            attrs[:excluded] = excluded if !excluded.nil? && entry.transaction?
 
             if attrs.present?
               attrs[:entryable_attributes] = attrs[:entryable_attributes].dup if attrs[:entryable_attributes].present?
