@@ -528,9 +528,16 @@ class Entry < ApplicationRecord
 
       tag_ids = Array.wrap(bulk_update_params[:tag_ids]).reject(&:blank?)
 
-      # An edit marks a transaction reviewed unless the caller says otherwise.
-      reviewed_override = ActiveModel::Type::Boolean.new.cast(bulk_update_params[:reviewed]) if bulk_update_params[:reviewed].present?
-      has_updates = bulk_attributes.present? || update_tags || !reviewed_override.nil?
+      # How the review state changes. Callers that say nothing (the Categorize
+      # flow) mark edited transactions reviewed, as a single edit does; the bulk
+      # edit drawer sends "unchanged" by default so editing leaves it alone.
+      review_mode = case bulk_update_params[:reviewed].to_s
+      when "unchanged" then :unchanged
+      when "true" then :reviewed
+      when "false" then :unreviewed
+      else :when_edited
+      end
+      has_updates = bulk_attributes.present? || update_tags || review_mode.in?(%i[reviewed unreviewed])
 
       return 0 unless has_updates
 
@@ -570,10 +577,10 @@ class Entry < ApplicationRecord
           end
 
           if entry.transaction?
-            if !reviewed_override.nil?
-              (reviewed_override ? reviewed_entries : unreviewed_entries) << entry
-            elsif changed
-              reviewed_entries << entry
+            case review_mode
+            when :reviewed then reviewed_entries << entry
+            when :unreviewed then unreviewed_entries << entry
+            when :when_edited then reviewed_entries << entry if changed
             end
           end
         end
