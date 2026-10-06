@@ -32,4 +32,55 @@ class EntryTest < ActiveSupport::TestCase
 
     assert_not_nil category.reload.last_used_at
   end
+
+  test "reset_exclusion! undoes a manual exclusion when it was the only manual change" do
+    entry = create_transaction(account: accounts(:depository), amount: 10, name: "Reset me")
+    entry.update!(excluded: true)
+    entry.lock_saved_attributes!
+    entry.mark_user_modified!
+
+    assert entry.reset_exclusion!
+
+    entry.reload
+    assert_not entry.excluded?
+    assert_not entry.locked?(:excluded)
+    assert_not entry.user_modified?
+  end
+
+  test "reset_exclusion! keeps the user-modified mark while other manual changes remain" do
+    entry = create_transaction(account: accounts(:depository), amount: 10, name: "Reset me")
+    entry.update!(excluded: true, notes: "Kept")
+    entry.lock_saved_attributes!
+    entry.mark_user_modified!
+
+    entry.reset_exclusion!
+
+    entry.reload
+    assert_not entry.excluded?
+    assert entry.locked?(:notes)
+    assert entry.user_modified?
+  end
+
+  test "reset_exclusion! keeps the mark while the transaction itself has manual changes" do
+    category = categories(:food_and_drink)
+    entry = create_transaction(account: accounts(:depository), amount: 10, name: "Reset me")
+    entry.update!(excluded: true)
+    entry.lock_saved_attributes!
+    entry.mark_user_modified!
+    entry.entryable.update!(category: category)
+    entry.entryable.lock_attr!(:category_id)
+
+    entry.reset_exclusion!
+
+    assert entry.reload.user_modified?
+    assert entry.entryable.locked?(:category_id)
+  end
+
+  test "reset_exclusion! does nothing for an exclusion the user did not set" do
+    entry = create_transaction(account: accounts(:depository), amount: 10, name: "System excluded")
+    entry.update_columns(excluded: true)
+
+    assert_not entry.reset_exclusion!
+    assert entry.reload.excluded?
+  end
 end

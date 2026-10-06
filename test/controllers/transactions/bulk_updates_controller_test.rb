@@ -219,7 +219,8 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
     get new_transactions_bulk_update_url
 
     assert_response :success
-    assert_select "select[name='bulk_update[excluded]'] option", count: 3
+    assert_select "select[name='bulk_update[excluded]'] option", count: 4
+    assert_select "select[name='bulk_update[excluded]'] option[value=reset]", text: "Reset to default (remove my manual setting)"
     assert_select "select[name='bulk_update[excluded]'] option[value='']", text: "No change"
     assert_select "select[name='bulk_update[excluded]'] option[value=true]", text: "Exclude from budgeting and reports"
     assert_select "select[name='bulk_update[excluded]'] option[value=false]", text: "Include in budgeting and reports"
@@ -267,5 +268,82 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
 
     assert_equal "Back in", entry.reload.notes
     assert_not entry.excluded?
+  end
+
+  test "bulk reset hands a manually excluded transaction back to its defaults" do
+    entry = @user.family.entries.transactions.first
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], excluded: "true" } }
+    assert entry.reload.excluded?
+    assert entry.locked?(:excluded)
+    assert entry.user_modified?
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], excluded: "reset" } }
+
+    entry.reload
+    assert_not entry.excluded?
+    assert_not entry.locked?(:excluded)
+    assert_not entry.user_modified?
+  end
+
+  test "after a reset, rules can act on the transaction again" do
+    entry = @user.family.entries.transactions.first
+    entry.update_columns(excluded: true)
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], excluded: "false" } }
+    assert_not entry.reload.excluded?
+    assert entry.locked?(:excluded)
+
+    exclude_rule = Rule::ActionExecutor::ExcludeTransaction.new(rules(:one))
+    assert_equal 0, exclude_rule.execute(Transaction.where(id: entry.entryable_id)), "a manual choice is respected"
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], excluded: "reset" } }
+
+    assert_equal 1, exclude_rule.execute(Transaction.where(id: entry.entryable_id))
+    assert entry.reload.excluded?
+  end
+
+  test "bulk reset leaves transactions alone that the user never set themselves" do
+    entry = @user.family.entries.transactions.first
+    entry.update_columns(excluded: true, user_modified: false, locked_attributes: {})
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], excluded: "reset" } }
+
+    assert entry.reload.excluded?, "excluded by a rule or the system, not by the user"
+  end
+
+  test "bulk reset keeps the protection that other manual changes still need" do
+    entry = @user.family.entries.transactions.first
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], excluded: "true", notes: "My note" } }
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], excluded: "reset" } }
+
+    entry.reload
+    assert_not entry.excluded?
+    assert_not entry.locked?(:excluded)
+    assert entry.locked?(:notes), "the note stays protected"
+    assert entry.user_modified?
+    assert_equal "My note", entry.notes
+  end
+
+  test "bulk reset can be combined with other edits" do
+    entry = @user.family.entries.transactions.first
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], excluded: "true" } }
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], notes: "Edited while resetting", excluded: "reset" } }
+
+    entry.reload
+    assert_equal "Edited while resetting", entry.notes
+    assert_not entry.excluded?
+    assert_not entry.locked?(:excluded)
+    assert entry.locked?(:notes)
+    assert entry.user_modified?
+  end
+
+  test "an unknown excluded choice changes nothing" do
+    entry = @user.family.entries.transactions.first
+    entry.update_columns(excluded: false)
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], excluded: "banana" } }
+
+    assert_not entry.reload.excluded?
   end
 end

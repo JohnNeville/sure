@@ -24,8 +24,9 @@
                             ],
                             { selected: "unchanged", include_blank: false, label: t(".review_label") } %>
             <%= form.select :excluded,
-                            [ [ t(".excluded_include"), "false" ], [ t(".excluded_exclude"), "true" ] ],
+                            [ [ t(".excluded_include"), "false" ], [ t(".excluded_exclude"), "true" ], [ t(".excluded_reset"), "reset" ] ],
                             { include_blank: t(".excluded_prompt"), label: t(".excluded_label") } %>
+            <p class="text-xs text-secondary"><%= t(".excluded_reset_hint") %></p>
           </div>
         <% end %>
       </div>
