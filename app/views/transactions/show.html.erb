@@ -94,6 +94,7 @@
             <% end %>
           <% end %>
         <% end %>
+        <%= render "transactions/review_status", transaction: @entry.transaction, can_annotate: can_annotate_entry? %>
       </div>
     <% end %>
     <% dialog.with_section(title: t(".details")) do %>
