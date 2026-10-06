@@ -381,6 +381,7 @@ en:
           show: Show synced balance updates
         account_filter:
           filter_accounts: Filter accounts
+          select_group: Select all %{group} accounts
         category_filter:
           filter_category: Filter category
         date_filter:
