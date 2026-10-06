@@ -102,3 +102,29 @@ PLAID_ENV: ${PLAID_ENV}
 ---
 
 Once you access your Sure instance from your domain, you should now see the **Link account** option in the Sure UI.
+
+---
+
+# Controlling Billable Refreshes (Optional)
+
+When Sure syncs a Plaid connection, it asks Plaid to refresh that connection's transactions from the bank first. Depending on your Plaid plan, Plaid may bill for each of those refresh requests. Plaid also refreshes connections on its own schedule, so you can trade a little freshness for fewer billed requests.
+
+Each connection that supports transactions has a **Max update interval for billable refreshes** setting on its card in **Accounts**:
+
+| Setting | Automatic syncs request a refresh |
+| --- | --- |
+| **Always** (default) | On every sync, exactly as before |
+| **Daily** | At most once per calendar day |
+| **Weekly** | At most once every 7 days |
+| **Monthly** | At most once every 30 days |
+| **Never** | Not at all |
+
+A few things to know:
+
+- **Only the refresh request is limited.** Sure still syncs transactions from Plaid on every sync. It just doesn't ask Plaid to go back to the bank each time.
+- **Syncs you start yourself always refresh.** Using **Sync all** on the Accounts page, or syncing an account, requests a refresh whatever the interval says. If any connection has a limited interval, **Sync all** asks you to confirm first and names those connections.
+- **Scheduled and automatic syncs follow the interval.** That covers the nightly sync, the sync that runs when you sign in, and **Sync all** on the Providers settings page.
+- **Intervals count calendar days.** A "Daily" connection refreshes once per day even if the nightly sync fires a few seconds earlier than it did the night before.
+- **"Never" relies on Plaid's own schedule.** If your instance cannot receive Plaid webhooks, new transactions may show up later than you expect. Pick a longer interval rather than "Never" if freshness matters.
+
+To see what you are being billed for, check your Plaid dashboard's transactions refresh usage.
