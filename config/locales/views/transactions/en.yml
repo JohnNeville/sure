@@ -213,6 +213,7 @@ en:
       edit_tags: "Edit tags"
       edit_merchants: "Edit merchants"
       edit_imports: "Edit imports"
+      rejected_transfers: "Rejected transfer matches"
       new_transaction: "New transaction"
       categorize_button:
         one: "Categorize (1)"

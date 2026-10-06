@@ -16,6 +16,12 @@ class TransferMatchesController < ApplicationController
     Transfer.transaction do
       @transfer.save!
 
+      # The user has now matched this pair, so an earlier rejection no longer applies.
+      RejectedTransfer.where(
+        inflow_transaction_id: @transfer.inflow_transaction_id,
+        outflow_transaction_id: @transfer.outflow_transaction_id
+      ).delete_all
+
       # Use DESTINATION (inflow) account for kind, matching Transfer::Creator logic
       destination_account = @transfer.inflow_transaction.entry.account
       outflow_kind = Transfer.kind_for_account(destination_account)

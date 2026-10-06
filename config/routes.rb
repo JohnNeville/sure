@@ -498,6 +498,8 @@ Rails.application.routes.draw do
 
   get :exchange_rate, to: "exchange_rates#show"
 
+  resources :rejected_transfers, only: %i[index destroy]
+
   resources :transfers, only: %i[new create destroy show update] do
     member do
       post :mark_as_recurring

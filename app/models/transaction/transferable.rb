@@ -28,7 +28,7 @@ module Transaction::Transferable
       Transfer.new(
         inflow_transaction_id: match.inflow_transaction_id,
         outflow_transaction_id: match.outflow_transaction_id,
-      )
+      ).tap { |candidate| candidate.previously_rejected = match.rejected_transfer_id.present? }
     end
   end
 
