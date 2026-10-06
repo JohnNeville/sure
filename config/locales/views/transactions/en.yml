@@ -11,6 +11,8 @@ en:
         excluded_include: Include in budgeting and reports
         excluded_label: Budgeting and reports
         excluded_prompt: No change
+        excluded_reset: Reset to default (remove my manual setting)
+        excluded_reset_hint: Reset returns the setting to its default and lets rules and syncs manage it again. It only affects transactions where you set it yourself.
         header_title: Edit transactions
         merchant_label: Merchant
         merchant_prompt: Select a merchant
