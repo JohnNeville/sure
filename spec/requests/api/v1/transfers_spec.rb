@@ -42,6 +42,17 @@ RSpec.describe 'API V1 Transfers', type: :request do
     ).tap { |api_key| api_key.save!(validate: false) }
   end
 
+  let(:api_key_read_only) do
+    key = ApiKey.generate_secure_key
+    ApiKey.create!(
+      user: user,
+      name: 'Read Only Docs Key',
+      key: key,
+      scopes: %w[read],
+      source: 'mobile'
+    )
+  end
+
   let(:'X-Api-Key') { api_key.plain_key }
   let(:checking) { family.accounts.create!(name: 'Checking', balance: 1000, currency: 'USD', accountable: Depository.create!) }
   let(:savings) { family.accounts.create!(name: 'Savings', balance: 2500, currency: 'USD', accountable: Depository.create!) }
@@ -160,6 +171,92 @@ RSpec.describe 'API V1 Transfers', type: :request do
         schema '$ref' => '#/components/schemas/ErrorResponse'
 
         let(:'X-Api-Key') { api_key_without_read_scope.plain_key }
+
+        run_test!
+      end
+
+      response '404', 'transfer not found' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:id) { SecureRandom.uuid }
+
+        run_test!
+      end
+    end
+  end
+
+  path '/api/v1/transfers/{id}/confirm' do
+    parameter name: :id, in: :path, type: :string, required: true, description: 'Transfer ID'
+
+    post 'Confirm a pending transfer' do
+      tags 'Transfers'
+      security [ { apiKeyAuth: [] } ]
+      produces 'application/json'
+      description 'Marks a pending transfer match as confirmed. Confirming a transfer that is already confirmed succeeds without changing anything. Requires write access to the outflow account.'
+
+      let(:id) { transfer.id }
+
+      response '200', 'transfer confirmed' do
+        schema '$ref' => '#/components/schemas/TransferDecision'
+
+        run_test!
+      end
+
+      response '401', 'unauthorized' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { nil }
+
+        run_test!
+      end
+
+      response '403', 'insufficient scope or no write access to the account' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { api_key_read_only.plain_key }
+
+        run_test!
+      end
+
+      response '404', 'transfer not found' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:id) { SecureRandom.uuid }
+
+        run_test!
+      end
+    end
+  end
+
+  path '/api/v1/transfers/{id}/reject' do
+    parameter name: :id, in: :path, type: :string, required: true, description: 'Transfer ID'
+
+    post 'Reject a transfer match' do
+      tags 'Transfers'
+      security [ { apiKeyAuth: [] } ]
+      produces 'application/json'
+      description 'Denies a transfer match. The pair is recorded as a rejected transfer so automatic matching will not propose it again, and the two transactions become ordinary transactions. The transfer no longer exists afterwards, so the response is the rejected transfer that replaced it. Requires write access to the outflow account.'
+
+      let(:id) { transfer.id }
+
+      response '200', 'transfer rejected' do
+        schema '$ref' => '#/components/schemas/RejectedTransfer'
+
+        run_test!
+      end
+
+      response '401', 'unauthorized' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { nil }
+
+        run_test!
+      end
+
+      response '403', 'insufficient scope or no write access to the account' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { api_key_read_only.plain_key }
 
         run_test!
       end

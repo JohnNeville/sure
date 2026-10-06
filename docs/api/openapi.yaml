@@ -10103,6 +10103,92 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+  "/api/v1/transfers/{id}/confirm":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Transfer ID
+      schema:
+        type: string
+    post:
+      summary: Confirm a pending transfer
+      tags:
+      - Transfers
+      security:
+      - apiKeyAuth: []
+      description: Marks a pending transfer match as confirmed. Confirming a transfer
+        that is already confirmed succeeds without changing anything. Requires write
+        access to the outflow account.
+      responses:
+        '200':
+          description: transfer confirmed
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TransferDecision"
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '403':
+          description: insufficient scope or no write access to the account
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '404':
+          description: transfer not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/v1/transfers/{id}/reject":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Transfer ID
+      schema:
+        type: string
+    post:
+      summary: Reject a transfer match
+      tags:
+      - Transfers
+      security:
+      - apiKeyAuth: []
+      description: Denies a transfer match. The pair is recorded as a rejected transfer
+        so automatic matching will not propose it again, and the two transactions
+        become ordinary transactions. The transfer no longer exists afterwards, so
+        the response is the rejected transfer that replaced it. Requires write access
+        to the outflow account.
+      responses:
+        '200':
+          description: transfer rejected
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RejectedTransfer"
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '403':
+          description: insufficient scope or no write access to the account
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '404':
+          description: transfer not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
   "/api/v1/users/reset":
     delete:
       summary: Reset account
