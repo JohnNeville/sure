@@ -11,11 +11,18 @@ class TransactionReviewsController < ApplicationController
     respond_to do |format|
       format.html { redirect_back_or_to transactions_path }
       format.turbo_stream do
-        render turbo_stream: turbo_stream.replace(
-          dom_id(transaction, :review),
-          partial: "transactions/review_button",
-          locals: { transaction: transaction }
-        )
+        render turbo_stream: [
+          turbo_stream.replace(
+            dom_id(transaction, :review),
+            partial: "transactions/review_button",
+            locals: { transaction: transaction }
+          ),
+          turbo_stream.replace(
+            dom_id(transaction, :review_status),
+            partial: "transactions/review_status",
+            locals: { transaction: transaction, can_annotate: true }
+          )
+        ]
       end
     end
   end

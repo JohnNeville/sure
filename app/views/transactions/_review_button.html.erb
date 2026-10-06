@@ -7,7 +7,7 @@
         variant: :icon,
         size: :sm,
         icon: transaction.reviewed? ? "circle-check" : "circle",
-        href: transaction_review_path(transaction),
+        href: transaction_review_path(transaction.entry),
         method: :patch,
         params: { reviewed: !transaction.reviewed? },
         frame: :_top,

@@ -1,0 +1,24 @@
+<%# locals: (transaction:, can_annotate:) %>
+
+<%= tag.div id: dom_id(transaction, :review_status) do %>
+  <%= styled_form_with url: transaction_review_path(transaction.entry),
+        method: :patch,
+        class: "p-3",
+        data: { controller: "auto-submit-form" } do |f| %>
+    <div class="flex cursor-pointer items-center gap-4 justify-between">
+      <div class="text-sm space-y-1">
+        <h4 class="text-primary"><%= t("transactions.review_status.title") %></h4>
+        <p class="text-secondary">
+          <% if transaction.reviewed? %>
+            <%= t("transactions.review_status.reviewed_on", date: l(transaction.reviewed_at.to_date, format: :long)) %>
+          <% else %>
+            <%= t("transactions.review_status.not_reviewed") %>
+          <% end %>
+        </p>
+      </div>
+      <%= f.toggle :reviewed,
+            { checked: transaction.reviewed?, disabled: !can_annotate, data: { auto_submit_form_target: "auto" } },
+            "true", "false" %>
+    </div>
+  <% end %>
+<% end %>
