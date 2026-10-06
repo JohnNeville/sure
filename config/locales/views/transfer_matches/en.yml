@@ -20,5 +20,7 @@ en:
       create_new_transaction: Create new transaction
       matching_method: Matching method
       matching_transaction: Matching transaction
+      previously_rejected: "%{name} (previously rejected)"
+      previously_rejected_hint: Transactions marked "previously rejected" were matched and rejected before. Choosing one matches it again.
       target_account: Target account
       no_matching_transactions: We couldn't find any transactions to match from your other accounts. Please select an account and we will create a new inflow transaction for you.

@@ -1,0 +1,49 @@
+<div class="space-y-4 pb-6 lg:pb-12">
+  <header class="space-y-1">
+    <h1 class="text-xl font-medium text-primary"><%= t(".title") %></h1>
+    <p class="text-sm text-secondary"><%= t(".description") %></p>
+  </header>
+
+  <% if @rejected_transfers.empty? %>
+    <p class="text-sm text-secondary p-4"><%= t(".empty") %></p>
+  <% else %>
+    <%= render DS::Table.new(rows: @rejected_transfers, label: t(".table_label")) do |table| %>
+      <% table.with_column(t(".rejected_on")) { |rejected| l(rejected.created_at.to_date, format: :long) } %>
+      <% table.with_column(t(".outflow")) do |rejected| %>
+        <% entry = rejected.outflow_transaction.entry %>
+        <div class="space-y-0.5">
+          <p class="text-primary"><%= entry.name %></p>
+          <p class="text-xs text-secondary"><%= entry.account.name %> &middot; <%= l(entry.date, format: :long) %></p>
+        </div>
+      <% end %>
+      <% table.with_column(t(".inflow")) do |rejected| %>
+        <% entry = rejected.inflow_transaction.entry %>
+        <div class="space-y-0.5">
+          <p class="text-primary"><%= entry.name %></p>
+          <p class="text-xs text-secondary"><%= entry.account.name %> &middot; <%= l(entry.date, format: :long) %></p>
+        </div>
+      <% end %>
+      <% table.with_column(t(".amount"), numeric: true, class: "privacy-sensitive") { |rejected| format_money(rejected.inflow_transaction.entry.amount_money.abs) } %>
+      <% table.with_column("", align: :right) do |rejected| %>
+        <div class="flex items-center justify-end gap-2">
+          <%= render DS::Link.new(
+                text: t(".match"),
+                variant: "outline",
+                size: :sm,
+                href: new_transaction_transfer_match_path(rejected.outflow_transaction.entry),
+                frame: :modal
+              ) %>
+          <%= render DS::Button.new(
+                text: t(".restore"),
+                variant: "outline",
+                size: :sm,
+                href: rejected_transfer_path(rejected),
+                method: :delete
+              ) %>
+        </div>
+      <% end %>
+    <% end %>
+
+    <%= render "shared/pagination", pagy: @pagy if @pagy.pages > 1 %>
+  <% end %>
+</div>
