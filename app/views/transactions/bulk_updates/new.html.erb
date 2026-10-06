@@ -16,8 +16,9 @@
             <%= form.select :tag_ids, Current.family.tags.alphabetically.pluck(:name, :id), { include_blank: t(".none"), multiple: true, label: t(".tags_label"), include_hidden: false } %>
             <%= form.text_area :notes, label: t(".notes_label"), placeholder: t(".notes_placeholder"), rows: 5 %>
             <%= form.select :excluded,
-                            [ [ t(".excluded_include"), "false" ], [ t(".excluded_exclude"), "true" ] ],
+                            [ [ t(".excluded_include"), "false" ], [ t(".excluded_exclude"), "true" ], [ t(".excluded_reset"), "reset" ] ],
                             { include_blank: t(".excluded_prompt"), label: t(".excluded_label") } %>
+            <p class="text-xs text-secondary"><%= t(".excluded_reset_hint") %></p>
           </div>
         <% end %>
       </div>
