@@ -44,6 +44,7 @@ en:
       from: From
       to: To
       date: Date
+      transaction_name: Transaction
       transfer_amount: Transfer amount
       total: Total
       bank_charges: Bank Charges
