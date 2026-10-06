@@ -188,7 +188,157 @@ class Api::V1::TransfersControllerTest < ActionDispatch::IntegrationTest
     api_key_without_read&.destroy
   end
 
+
+  test "confirms a pending transfer" do
+    pending = create_pending_transfer
+
+    post confirm_api_v1_transfer_url(pending), headers: api_headers(write_api_key)
+
+    assert_response :success
+    response_data = JSON.parse(response.body)
+    assert_equal pending.id, response_data["id"]
+    assert_equal "confirmed", response_data["status"]
+    assert pending.reload.confirmed?
+  end
+
+  test "confirming an already confirmed transfer succeeds without changes" do
+    post confirm_api_v1_transfer_url(@transfer), headers: api_headers(write_api_key)
+
+    assert_response :success
+    assert_equal "confirmed", JSON.parse(response.body)["status"]
+    assert_equal "Confirmed by user", @transfer.reload.notes
+  end
+
+  test "rejects a pending transfer and returns the rejected transfer" do
+    pending = create_pending_transfer
+    inflow_id = pending.inflow_transaction_id
+    outflow_id = pending.outflow_transaction_id
+
+    assert_difference -> { RejectedTransfer.count }, 1 do
+      assert_difference -> { Transfer.count }, -1 do
+        post reject_api_v1_transfer_url(pending), headers: api_headers(write_api_key)
+      end
+    end
+
+    assert_response :success
+    response_data = JSON.parse(response.body)
+    rejected = RejectedTransfer.find_by!(inflow_transaction_id: inflow_id, outflow_transaction_id: outflow_id)
+    assert_equal rejected.id, response_data["id"]
+    assert_equal inflow_id, response_data.dig("inflow_transaction", "id")
+    assert_equal outflow_id, response_data.dig("outflow_transaction", "id")
+    assert_equal "standard", Transaction.find(inflow_id).kind
+    assert_equal "standard", Transaction.find(outflow_id).kind
+  end
+
+  test "a rejected transfer shows up in the rejected transfers list and is gone from transfers" do
+    pending = create_pending_transfer
+
+    post reject_api_v1_transfer_url(pending), headers: api_headers(write_api_key)
+    rejected_id = JSON.parse(response.body)["id"]
+
+    get api_v1_rejected_transfers_url, headers: api_headers(write_api_key)
+    assert_includes JSON.parse(response.body)["rejected_transfers"].map { |row| row["id"] }, rejected_id
+
+    get api_v1_transfer_url(pending), headers: api_headers(write_api_key)
+    assert_response :not_found
+  end
+
+  test "rejecting a transfer that no longer exists is not found" do
+    pending = create_pending_transfer
+    post reject_api_v1_transfer_url(pending), headers: api_headers(write_api_key)
+    assert_response :success
+
+    post reject_api_v1_transfer_url(pending), headers: api_headers(write_api_key)
+
+    assert_response :not_found
+  end
+
+  test "a confirmed transfer can also be rejected" do
+    assert_difference -> { RejectedTransfer.count }, 1 do
+      post reject_api_v1_transfer_url(@transfer), headers: api_headers(write_api_key)
+    end
+
+    assert_response :success
+    assert_not Transfer.exists?(@transfer.id)
+  end
+
+  test "a read-only key cannot confirm or reject" do
+    pending = create_pending_transfer
+
+    post confirm_api_v1_transfer_url(pending), headers: api_headers(@api_key)
+    assert_response :forbidden
+
+    post reject_api_v1_transfer_url(pending), headers: api_headers(@api_key)
+    assert_response :forbidden
+
+    assert pending.reload.pending?
+    assert_not RejectedTransfer.exists?(inflow_transaction_id: pending.inflow_transaction_id)
+  end
+
+  test "a user without write access to the outflow account cannot decide on a transfer" do
+    member = users(:family_member)
+    member.api_keys.active.destroy_all
+    member_key = ApiKey.create!(user: member, name: "Member Key", scopes: [ "read_write" ], source: "web", display_key: "member_#{SecureRandom.hex(8)}")
+    pending = create_pending_transfer
+    [ @account, @destination_account ].each { |account| account.account_shares.create!(user: member, permission: "read_only") }
+
+    get api_v1_transfer_url(pending), headers: api_headers(member_key)
+    assert_response :success
+
+    post confirm_api_v1_transfer_url(pending), headers: api_headers(member_key)
+    assert_response :forbidden
+    assert_equal "forbidden", JSON.parse(response.body)["error"]
+
+    post reject_api_v1_transfer_url(pending), headers: api_headers(member_key)
+    assert_response :forbidden
+    assert pending.reload.pending?
+  end
+
+  test "cannot decide on another family's transfer" do
+    post confirm_api_v1_transfer_url(@other_transfer), headers: api_headers(write_api_key)
+    assert_response :not_found
+
+    post reject_api_v1_transfer_url(@other_transfer), headers: api_headers(write_api_key)
+    assert_response :not_found
+
+    assert Transfer.exists?(@other_transfer.id)
+  end
+
+  test "confirm and reject return not found for a malformed id" do
+    post confirm_api_v1_transfer_url("not-a-uuid"), headers: api_headers(write_api_key)
+    assert_response :not_found
+
+    post reject_api_v1_transfer_url("not-a-uuid"), headers: api_headers(write_api_key)
+    assert_response :not_found
+  end
+
+  test "confirm and reject require authentication" do
+    pending = create_pending_transfer
+
+    post confirm_api_v1_transfer_url(pending)
+    assert_response :unauthorized
+
+    post reject_api_v1_transfer_url(pending)
+    assert_response :unauthorized
+  end
+
   private
+
+    def write_api_key
+      @write_api_key ||= ApiKey.create!(
+        user: @user,
+        name: "Test Read Write Key",
+        scopes: [ "read_write" ],
+        source: "mobile",
+        display_key: "test_rw_#{SecureRandom.hex(8)}"
+      )
+    end
+
+    def create_pending_transfer
+      outflow = create_transaction(@account, amount: 60, date: Date.parse("2024-03-01"), name: "Pending outflow")
+      inflow = create_transaction(@destination_account, amount: -60, date: Date.parse("2024-03-02"), name: "Pending inflow")
+      Transfer.create!(outflow_transaction: outflow, inflow_transaction: inflow, status: "pending")
+    end
 
     def create_transaction(account, amount:, date:, name:)
       entry = account.entries.create!(

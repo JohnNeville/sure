@@ -789,7 +789,12 @@ Rails.application.routes.draw do
       end
       resources :trades, only: [ :index, :show, :create, :update, :destroy ]
       resources :holdings, only: [ :index, :show ]
-      resources :transfers, only: [ :index, :show ]
+      resources :transfers, only: [ :index, :show ] do
+        member do
+          post :confirm
+          post :reject
+        end
+      end
       resources :rejected_transfers, only: [ :index, :show ]
       resources :valuations, only: [ :index, :create, :update, :show ]
       resources :recurring_transactions, only: [ :index, :show, :create, :update, :destroy ]
