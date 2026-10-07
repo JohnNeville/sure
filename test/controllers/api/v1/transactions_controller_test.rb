@@ -1091,6 +1091,142 @@ end
     assert entry.reload.excluded?
   end
 
+  # extra: provider details are readable, and clients may write only extra["import"]
+
+  test "show and index return the transaction's extra" do
+    @transaction.update!(extra: { "plaid" => { "payment_channel" => "other", "counterparties" => [ { "name" => "Vanguard" } ] } })
+
+    get api_v1_transaction_url(@transaction), headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal "other", JSON.parse(response.body).dig("extra", "plaid", "payment_channel")
+    assert_equal "Vanguard", JSON.parse(response.body).dig("extra", "plaid", "counterparties", 0, "name")
+
+    get api_v1_transactions_url, params: { per_page: 100 }, headers: api_headers(@api_key)
+    row = JSON.parse(response.body)["transactions"].find { |t| t["id"] == @transaction.id }
+    assert_equal "other", row.dig("extra", "plaid", "payment_channel")
+  end
+
+  test "extra is an empty object when a transaction has none" do
+    @transaction.update!(extra: {})
+
+    get api_v1_transaction_url(@transaction), headers: api_headers(@api_key)
+
+    assert_response :success
+    assert_equal({}, JSON.parse(response.body)["extra"])
+  end
+
+  test "create stores extra.import" do
+    post api_v1_transactions_url,
+         params: { transaction: {
+           account_id: @account.id, name: "Vanguard", amount: 25, date: Date.current, currency: "USD", nature: "expense",
+           extra: { import: { original_description: "VANGUARD TOT WORLD STK I", source: "Quicken", check_number: 1042 } }
+         } },
+         headers: api_headers(@api_key)
+
+    assert_response :created
+    assert_equal(
+      { "original_description" => "VANGUARD TOT WORLD STK I", "source" => "Quicken", "check_number" => "1042" },
+      JSON.parse(response.body).dig("extra", "import")
+    )
+    assert_equal "Quicken", Transaction.find(JSON.parse(response.body)["id"]).extra.dig("import", "source")
+  end
+
+  test "update deep-merges extra.import and leaves other providers' keys alone" do
+    @transaction.update!(extra: {
+      "plaid" => { "payment_channel" => "online" },
+      "goal" => { "id" => "abc" },
+      "import" => { "source" => "Quicken", "reference" => "R-1" }
+    })
+
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { extra: { import: { reference: "R-2", posting_date: "2026-01-03" } } } },
+          headers: api_headers(@api_key)
+
+    assert_response :success
+    extra = @transaction.reload.extra
+    assert_equal({ "source" => "Quicken", "reference" => "R-2", "posting_date" => "2026-01-03" }, extra["import"])
+    assert_equal({ "payment_channel" => "online" }, extra["plaid"])
+    assert_equal({ "id" => "abc" }, extra["goal"])
+  end
+
+  test "a null or blank import value removes just that key" do
+    @transaction.update!(extra: { "import" => { "source" => "Quicken", "reference" => "R-1" } })
+
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { extra: { import: { reference: nil, source: "  " } } } },
+          headers: api_headers(@api_key), as: :json
+
+    assert_response :success
+    assert_not @transaction.reload.extra.key?("import")
+  end
+
+  test "extra.import null clears the namespace without touching other keys" do
+    @transaction.update!(extra: { "plaid" => { "payment_channel" => "online" }, "import" => { "source" => "Quicken" } })
+
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { extra: { import: nil } } },
+          headers: api_headers(@api_key), as: :json
+
+    assert_response :success
+    assert_equal({ "plaid" => { "payment_channel" => "online" } }, @transaction.reload.extra)
+  end
+
+  test "extra rejects keys other than import and changes nothing" do
+    @transaction.update!(extra: { "plaid" => { "payment_channel" => "online" } })
+
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { name: "Should not apply", extra: { plaid: { payment_channel: "hijacked" }, import: { source: "x" } } } },
+          headers: api_headers(@api_key), as: :json
+
+    assert_response :unprocessable_entity
+    assert_match(/only accepts the "import" key/, JSON.parse(response.body)["message"])
+    assert_equal({ "plaid" => { "payment_channel" => "online" } }, @transaction.reload.extra)
+    assert_not_equal "Should not apply", @transaction.entry.name
+  end
+
+  test "extra.import rejects nested values, bad keys and oversized values" do
+    [
+      { import: { source: { nested: "x" } } },
+      { import: { "Bad Key" => "x" } },
+      { import: { source: "x" * 1_001 } },
+      { import: "not an object" },
+      "not an object"
+    ].each do |bad_extra|
+      patch api_v1_transaction_url(@transaction),
+            params: { transaction: { extra: bad_extra } },
+            headers: api_headers(@api_key), as: :json
+
+      assert_response :unprocessable_entity, "expected #{bad_extra.inspect} to be rejected"
+    end
+  end
+
+  test "create with invalid extra creates nothing" do
+    assert_no_difference("Entry.count") do
+      post api_v1_transactions_url,
+           params: { transaction: { account_id: @account.id, name: "x", amount: 1, date: Date.current, extra: { goal: {} } } },
+           headers: api_headers(@api_key), as: :json
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "writing extra.import does not lock the extra column against sync" do
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { extra: { import: { source: "Quicken" } } } },
+          headers: api_headers(@api_key)
+
+    assert_response :success
+    assert_not @transaction.reload.locked?(:extra)
+  end
+
+  test "read-only key cannot write extra" do
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { extra: { import: { source: "Quicken" } } } },
+          headers: api_headers(@read_only_api_key)
+
+    assert_response :forbidden
+  end
+
   private
 
     def api_headers(api_key)

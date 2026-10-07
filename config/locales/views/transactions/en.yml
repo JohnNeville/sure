@@ -135,6 +135,18 @@ en:
       transaction_code: "Transaction code"
       provider_extras: "Provider extras"
       plaid_payment_meta_label: "Payment meta · %{name}"
+      # Labels for the details API clients store under extra["import"]. Keys not
+      # listed fall back to a humanized form of the key.
+      import_field_labels:
+        original_description: "Original description"
+        posting_date: "Posting date"
+        bank_transaction_id: "Bank transaction ID"
+        reference: "Reference"
+        check_number: "Check number"
+        original_memo: "Original memo"
+        original_category: "Original category"
+        source: "Imported from"
+        source_account: "Source account"
       plaid_counterparty_label: "Counterparty %{index}"
       # Provider field names. The set is open-ended — anything not listed falls
       # back to a humanized form of the provider's own identifier.

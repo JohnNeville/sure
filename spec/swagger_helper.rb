@@ -895,6 +895,11 @@ RSpec.configure do |config|
               reviewed_at: { type: :string, format: :'date-time', nullable: true, description: 'When the transaction was marked reviewed; null when it still needs review' },
               excluded: { type: :boolean, description: 'Whether the transaction is excluded from budgets and reports' },
               classification: { type: :string },
+              extra: {
+                type: :object,
+                additionalProperties: true,
+                description: 'Provider and import details. Keys are provider-defined (for example plaid or simplefin, written by bank sync) plus import, the only namespace API clients can write.'
+              },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },
               merchant: { '$ref' => '#/components/schemas/Merchant', nullable: true },

@@ -166,4 +166,62 @@ class TransactionsHelperTest < ActionView::TestCase
 
     assert_equal %w[Loan], groups.map(&:first)
   end
+
+  test "renders extra.import with the same shape as the Plaid details" do
+    details = build_transaction_extra_details(transaction_with({
+      "import" => {
+        "original_description" => "VANGUARD TOT WORLD STK I",
+        "source" => "Quicken",
+        "check_number" => "1042",
+        "posting_date" => "2026-01-03",
+        "custom_thing" => "kept"
+      }
+    }))
+
+    assert_equal :import, details[:kind]
+    assert_equal "VANGUARD TOT WORLD STK I", details[:import][:original_description]
+    assert_nil details[:raw]
+    assert_equal(
+      [ "Posting date", "Check number", "Imported from", "Custom thing" ],
+      details[:provider_extras].map { |row| row[:key] }
+    )
+    assert_equal "1042", details[:provider_extras].find { |row| row[:key] == "Check number" }[:value]
+  end
+
+  test "extra.import with nothing to show yields no details" do
+    assert_nil build_transaction_extra_details(transaction_with({ "import" => { "source" => " " } }))
+  end
+
+  test "shows Plaid details first and appends the import's extras" do
+    details = build_transaction_extra_details(transaction_with({
+      "plaid" => { "original_description" => "PLAID DESC", "payment_channel" => "online" },
+      "import" => { "original_description" => "IMPORT DESC", "source" => "Personal Capital" }
+    }))
+
+    assert_equal :plaid, details[:kind]
+    assert_equal "PLAID DESC", details[:plaid][:original_description]
+    assert_equal [ "Original description", "Imported from" ], details[:provider_extras].map { |row| row[:key] }
+    assert_equal "IMPORT DESC", details[:provider_extras].first[:value]
+  end
+
+  test "the import's description fills the named row when the provider has none" do
+    details = build_transaction_extra_details(transaction_with({
+      "plaid" => { "payment_channel" => "online" },
+      "import" => { "original_description" => "IMPORT DESC" }
+    }))
+
+    assert_equal :plaid, details[:kind]
+    assert_equal "IMPORT DESC", details[:plaid][:original_description]
+    assert_equal "online", details[:plaid][:payment_channel]
+  end
+
+  test "import extras still render when the provider block has nothing to show" do
+    details = build_transaction_extra_details(transaction_with({
+      "plaid" => { "pending" => false },
+      "import" => { "source" => "Quicken" }
+    }))
+
+    assert_equal :import, details[:kind]
+    assert_equal [ "Imported from" ], details[:provider_extras].map { |row| row[:key] }
+  end
 end

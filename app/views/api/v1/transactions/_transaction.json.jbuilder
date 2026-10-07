@@ -92,6 +92,10 @@ else
   json.transfer nil
 end
 
+# Provider and import details (plaid, simplefin, import, ...). Keys are
+# provider-defined; "import" is the namespace API clients may write.
+json.extra transaction.extra.presence || {}
+
 # Additional metadata
 json.created_at transaction.created_at.iso8601
 json.updated_at transaction.updated_at.iso8601

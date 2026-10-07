@@ -145,11 +145,11 @@
     <% if (details = build_transaction_extra_details(@entry)) %>
       <% dialog.with_section(title: t(".additional_details"), open: false) do %>
         <div class="px-3 py-2 space-y-3">
-          <% if details[:kind] == :simplefin || details[:kind] == :plaid %>
+          <% if details[:kind].in?(%i[simplefin plaid import]) %>
             <%# build_transaction_extra_details already drops blank values, so every
                 key present here has something to show. Its keys double as locale
                 keys: payee/description/memo for SimpleFIN, original_description/
-                payment_channel/transaction_code for Plaid. %>
+                payment_channel/transaction_code for Plaid, original_description for imports. %>
             <% named_details = details[details[:kind]] %>
             <% if named_details.present? %>
               <dl class="space-y-2">

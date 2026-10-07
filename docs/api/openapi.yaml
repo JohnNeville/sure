@@ -1686,6 +1686,12 @@ components:
           description: Whether the transaction is excluded from budgets and reports
         classification:
           type: string
+        extra:
+          type: object
+          additionalProperties: true
+          description: Provider and import details. Keys are provider-defined (for
+            example plaid or simplefin, written by bank sync) plus import, the only
+            namespace API clients can write.
         account:
           "$ref": "#/components/schemas/Account"
         category:
@@ -9858,6 +9864,24 @@ paths:
                       type: string
                       description: Optional source namespace for external_id. Requires
                         external_id and defaults to api when external_id is provided
+                    extra:
+                      type: object
+                      description: 'Only the import key is accepted; it is deep-merged
+                        into the existing extra and never replaces plaid, simplefin
+                        or other keys. Values are strings (numbers are stringified,
+                        at most 1000 characters), keys lowercase letters, digits and
+                        underscores, at most 30 keys. A null or blank value removes
+                        that key and import: null removes the whole namespace. Suggested
+                        keys: original_description, posting_date, bank_transaction_id,
+                        reference, check_number, original_memo, original_category,
+                        source, source_account.'
+                      properties:
+                        import:
+                          type: object
+                          nullable: true
+                          additionalProperties:
+                            type: string
+                            nullable: true
                     user_modified:
                       type: boolean
                       description: Whether provider syncs should preserve user-supplied
@@ -9987,6 +10011,24 @@ paths:
                       type: boolean
                       description: Whether the transaction is excluded from budgets
                         and reports. Omit to leave it unchanged
+                    extra:
+                      type: object
+                      description: 'Only the import key is accepted; it is deep-merged
+                        into the existing extra and never replaces plaid, simplefin
+                        or other keys. Values are strings (numbers are stringified,
+                        at most 1000 characters), keys lowercase letters, digits and
+                        underscores, at most 30 keys. A null or blank value removes
+                        that key and import: null removes the whole namespace. Suggested
+                        keys: original_description, posting_date, bank_transaction_id,
+                        reference, check_number, original_memo, original_category,
+                        source, source_account.'
+                      properties:
+                        import:
+                          type: object
+                          nullable: true
+                          additionalProperties:
+                            type: string
+                            nullable: true
         required: true
     delete:
       summary: Delete a transaction
