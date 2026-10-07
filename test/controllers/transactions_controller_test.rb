@@ -1736,6 +1736,39 @@ end
     assert_no_match(/ai_status/, response.location)
   end
 
+  # What an API client writes to extra.import and extra.retail has to reach the
+  # person looking at the transaction, not only the JSON.
+  test "the details drawer shows the import and retail details written through the API" do
+    @entry.transaction.update!(extra: {
+      "plaid" => { "payment_channel" => "online" },
+      "import" => { "original_description" => "VANGUARD TOT WORLD STK I", "source" => "Quicken" },
+      "retail" => {
+        "retailer" => "Amazon",
+        "order_number" => "111-2223334-5556667",
+        "items" => [ { "title" => "USB-C cable", "quantity" => "2", "price" => "9.99" } ]
+      }
+    })
+
+    get transaction_url(@entry), headers: { "Turbo-Frame" => "drawer" }
+
+    assert_response :success
+    assert_match "Additional details", response.body
+    [ "Original description", "VANGUARD TOT WORLD STK I", "Imported from", "Quicken",
+      "Retailer", "Amazon", "Order number", "111-2223334-5556667",
+      "Item 1", "USB-C cable × 2 · 9.99" ].each do |text|
+      assert_includes response.body, ERB::Util.html_escape(text), "expected the drawer to show #{text.inspect}"
+    end
+  end
+
+  test "the details drawer has no Additional details section when retail has nothing to show" do
+    @entry.transaction.update!(extra: { "retail" => { "retailer" => " ", "items" => [] } })
+
+    get transaction_url(@entry), headers: { "Turbo-Frame" => "drawer" }
+
+    assert_response :success
+    assert_no_match "Additional details", response.body
+  end
+
   private
     def rendered_entry_ids
       css_select("turbo-frame[id^='entry_']").map { |node| node["id"].delete_prefix("entry_") }
