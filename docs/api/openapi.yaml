@@ -1692,6 +1692,25 @@ components:
           description: Provider and import details. Keys are provider-defined (for
             example plaid or simplefin, written by bank sync) plus import and retail,
             the namespaces API clients can write.
+        split_role:
+          type: string
+          enum:
+          - parent
+          - child
+          nullable: true
+          description: parent for a split transaction, child for one of its parts,
+            null otherwise
+        split_parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: For a child, the transaction it was split from
+        split_child_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: For a split parent, the ids of its children
         account:
           "$ref": "#/components/schemas/Account"
         category:
@@ -1713,6 +1732,18 @@ components:
         updated_at:
           type: string
           format: date-time
+    TransactionSplit:
+      type: object
+      required:
+      - parent
+      - children
+      properties:
+        parent:
+          "$ref": "#/components/schemas/Transaction"
+        children:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Transaction"
     TransactionCollection:
       type: object
       required:
@@ -9644,6 +9675,176 @@ paths:
                 "$ref": "#/components/schemas/ErrorResponse"
         '404':
           description: trade not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/v1/transactions/{transaction_id}/split":
+    parameters:
+    - name: transaction_id
+      in: path
+      required: true
+      description: Transaction ID. For show, update and destroy a split child resolves
+        to its parent.
+      schema:
+        type: string
+    get:
+      summary: Retrieve the split of a transaction
+      tags:
+      - Transactions
+      security:
+      - apiKeyAuth: []
+      responses:
+        '200':
+          description: split retrieved
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TransactionSplit"
+        '404':
+          description: transaction not found or not split
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    post:
+      summary: Split a transaction
+      tags:
+      - Transactions
+      description: Splits a posted transaction into children that together add up
+        to it. Children share the parent's date, account, currency and sign, so send
+        positive amounts that sum to the transaction's absolute amount. The parent
+        is kept, marked excluded from budgets and reports, and protected from provider
+        sync. Pending, transfer, excluded and already-split transactions cannot be
+        split.
+      security:
+      - apiKeyAuth: []
+      parameters: []
+      responses:
+        '201':
+          description: transaction split
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TransactionSplit"
+        '422':
+          description: invalid split
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '404':
+          description: transaction not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - splits
+              properties:
+                splits:
+                  type: array
+                  minItems: 2
+                  maxItems: 50
+                  description: At least two parts whose amounts sum exactly to the
+                    transaction amount
+                  items:
+                    type: object
+                    required:
+                    - amount
+                    properties:
+                      name:
+                        type: string
+                        description: Defaults to the transaction name
+                      amount:
+                        type: string
+                        description: Positive decimal, at most the currency's minor-unit
+                          precision
+                      category_id:
+                        type: string
+                        format: uuid
+                      notes:
+                        type: string
+                      excluded:
+                        type: boolean
+                        description: Exclude this part from budgets and reports
+        required: true
+    put:
+      summary: Replace the split of a transaction
+      tags:
+      - Transactions
+      description: Replaces an existing split atomically; the request has the same
+        shape as creating one.
+      security:
+      - apiKeyAuth: []
+      parameters: []
+      responses:
+        '200':
+          description: split replaced
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TransactionSplit"
+        '404':
+          description: transaction not found or not split
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '422':
+          description: invalid split
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - splits
+              properties:
+                splits:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                    - amount
+                    properties:
+                      name:
+                        type: string
+                      amount:
+                        type: string
+                      category_id:
+                        type: string
+                        format: uuid
+                      notes:
+                        type: string
+                      excluded:
+                        type: boolean
+        required: true
+    delete:
+      summary: Remove the split of a transaction
+      tags:
+      - Transactions
+      description: Deletes the children and restores the parent to budgets and reports.
+      security:
+      - apiKeyAuth: []
+      responses:
+        '200':
+          description: split removed
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TransactionSplit"
+        '404':
+          description: transaction not found or not split
           content:
             application/json:
               schema:
