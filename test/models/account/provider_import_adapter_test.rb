@@ -1714,4 +1714,48 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     assert_equal "outgoing_payment_sent", refreshed.extra.dig("wise", "status"),
       "the provider's own namespace should still refresh"
   end
+
+  test "find_duplicate_transaction never returns a split child" do
+    parent = @account.entries.create!(
+      date: Date.current, amount: 100, name: "Costco", currency: "USD", entryable: Transaction.new(kind: "standard")
+    )
+    parent.split!([ { name: "Groceries", amount: 60 }, { name: "Household", amount: 40 } ])
+
+    assert_nil @adapter.find_duplicate_transaction(date: Date.current, amount: 60, currency: "USD")
+    assert_nil @adapter.find_duplicate_transaction(date: Date.current, amount: 40, currency: "USD")
+    assert_nil @adapter.find_duplicate_transaction(date: Date.current, amount: 60, currency: "USD", date_window: 3, include_provider_entries: true)
+  end
+
+  test "find_duplicate_transaction still returns an ordinary entry" do
+    entry = @account.entries.create!(
+      date: Date.current, amount: 60, name: "Costco", currency: "USD", entryable: Transaction.new(kind: "standard")
+    )
+
+    assert_equal entry, @adapter.find_duplicate_transaction(date: Date.current, amount: 60, currency: "USD")
+  end
+
+  test "find_duplicate_transaction still matches a split parent that has no external id" do
+    parent = @account.entries.create!(
+      date: Date.current, amount: 100, name: "Costco", currency: "USD", entryable: Transaction.new(kind: "standard")
+    )
+    parent.split!([ { name: "Groceries", amount: 60 }, { name: "Household", amount: 40 } ])
+
+    assert_equal parent, @adapter.find_duplicate_transaction(date: Date.current, amount: 100, currency: "USD")
+  end
+
+  test "a provider transaction with a split child's amount becomes its own entry" do
+    parent = @account.entries.create!(
+      date: Date.current, amount: 100, name: "Costco", currency: "USD", entryable: Transaction.new(kind: "standard")
+    )
+    child = parent.split!([ { name: "Groceries", amount: 60 }, { name: "Household", amount: 40 } ]).first
+
+    assert_difference "@account.entries.count", 1 do
+      @adapter.import_transaction(
+        external_id: "plaid_split_child_lookalike", amount: 60, currency: "USD",
+        date: Date.current, name: "A different 60 dollar purchase", source: "plaid"
+      )
+    end
+
+    assert_nil child.reload.external_id, "the split child must not have been linked to the bank row"
+  end
 end
