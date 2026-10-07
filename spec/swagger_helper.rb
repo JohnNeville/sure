@@ -1083,6 +1083,11 @@ RSpec.configure do |config|
                 type: :string,
                 description: 'Currency of the amount, always the same as currency on a transaction.'
               },
+              extra: {
+                type: :object,
+                additionalProperties: true,
+                description: 'Provider and import details. Keys are provider-defined (for example plaid or simplefin, written by bank sync) plus import, the only namespace API clients can write.'
+              },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },
               merchant: { '$ref' => '#/components/schemas/Merchant', nullable: true },
