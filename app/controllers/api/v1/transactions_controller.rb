@@ -7,6 +7,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
   before_action :ensure_read_scope, only: [ :index, :show ]
   before_action :ensure_write_scope, only: [ :create, :update, :destroy ]
   before_action :set_transaction, only: [ :show, :update, :destroy ]
+  before_action :validate_import_extra, only: [ :create, :update ]
 
   def index
     family = current_resource_owner.family
@@ -102,6 +103,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
       @entry.lock_saved_attributes!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
       @entry.mark_user_modified! if user_modified_requested?
+      apply_import_extra(@entry.transaction)
       @entry.sync_account_later
 
       @transaction = @entry.transaction
@@ -154,6 +156,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
         @entry.sync_account_later
         @entry.lock_saved_attributes!
         @entry.mark_user_modified! if user_modified_requested?
+        apply_import_extra(@entry.transaction)
 
         @transaction = @entry.transaction
         render :show
@@ -328,6 +331,35 @@ class Api::V1::TransactionsController < Api::V1::BaseController
 
     def account_id_param
       params.dig(:transaction, :account_id).presence
+    end
+
+    # Clients may write only to extra["import"]; the rest of extra belongs to the
+    # bank-sync providers and to Sure itself. Checked up front so a bad request
+    # changes nothing, and applied after lock_saved_attributes! so the column is
+    # not locked against sync the way a user edit would be.
+    def extra_provided?
+      params[:transaction].respond_to?(:key?) && params[:transaction].key?(:extra)
+    end
+
+    def validate_import_extra
+      return unless extra_provided?
+
+      import_extra = Transaction::ImportExtra.new(params.dig(:transaction, :extra))
+      import_extra.apply_to(@entry&.transaction&.extra) if import_extra.valid?
+      return if import_extra.valid?
+
+      render json: {
+        error: "validation_failed",
+        message: import_extra.errors.first,
+        errors: import_extra.errors
+      }, status: :unprocessable_entity
+    end
+
+    def apply_import_extra(transaction)
+      return unless extra_provided?
+
+      merged = Transaction::ImportExtra.new(params.dig(:transaction, :extra)).apply_to(transaction.extra)
+      transaction.update!(extra: merged) unless merged == transaction.extra
     end
 
     def entry_params_for_create

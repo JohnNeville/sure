@@ -64,79 +64,142 @@ module TransactionsHelper
     return nil unless tx.respond_to?(:extra) && tx.extra.present?
 
     extra = tx.extra
+    return transaction_extra_raw_details(extra) unless extra.is_a?(Hash) &&
+      (extra["simplefin"].present? || extra["plaid"].present? || extra["import"].present?)
 
-    if extra.is_a?(Hash) && extra["simplefin"].present?
-      sf = extra["simplefin"]
-      simple = {
-        payee: sf.is_a?(Hash) ? sf["payee"].presence : nil,
-        description: sf.is_a?(Hash) ? sf["description"].presence : nil,
-        memo: sf.is_a?(Hash) ? sf["memo"].presence : nil
-      }.compact
-
-      extras = []
-      if sf.is_a?(Hash) && sf["extra"].is_a?(Hash) && sf["extra"].present?
-        sf["extra"].each do |k, v|
-          extras.concat(provider_extra_rows(provider_extra_field_label(k), v))
-        end
-      end
-
-      # Same rule as the Plaid branch below. SimpleFIN always writes a pending
-      # flag, so a transaction carrying nothing else would otherwise open an
-      # Additional details section with no details in it.
-      return nil if simple.blank? && extras.blank?
-
-      {
-        kind: :simplefin,
-        simplefin: simple,
-        plaid: {},
-        provider_extras: extras,
-        raw: nil
-      }
-    elsif extra.is_a?(Hash) && extra["plaid"].present?
-      plaid = extra["plaid"]
-      simple = {
-        original_description: plaid.is_a?(Hash) ? plaid["original_description"].presence : nil,
-        payment_channel: plaid.is_a?(Hash) ? plaid["payment_channel"].presence : nil,
-        transaction_code: plaid.is_a?(Hash) ? plaid["transaction_code"].presence : nil
-      }.compact
-
-      extras = []
-      if plaid.is_a?(Hash)
-        if plaid["payment_meta"].is_a?(Hash) && plaid["payment_meta"].present?
-          plaid["payment_meta"].each do |k, v|
-            extras.concat(provider_extra_rows(t("transactions.show.plaid_payment_meta_label", name: provider_extra_field_label(k)), v))
-          end
-        end
-
-        if plaid["counterparties"].is_a?(Array) && plaid["counterparties"].present?
-          plaid["counterparties"].each_with_index do |counterparty, index|
-            extras.concat(provider_extra_rows(t("transactions.show.plaid_counterparty_label", index: index + 1), counterparty))
-          end
-        end
-      end
-
-      # Only show Additional details when there is something beyond pending flags
-      return nil if simple.blank? && extras.blank?
-
-      {
-        kind: :plaid,
-        simplefin: {},
-        plaid: simple,
-        provider_extras: extras,
-        # No raw dump: the structured rows above already cover the payload, and
-        # the only fields they omit (pending, pending_transaction_id) are what
-        # the pending badge communicates.
-        raw: nil
-      }
-    else
-      {
-        kind: :raw,
-        simplefin: {},
-        plaid: {},
-        provider_extras: [],
-        raw: pretty_json(extra)
-      }
+    details = if extra["simplefin"].present?
+      simplefin_extra_details(extra["simplefin"])
+    elsif extra["plaid"].present?
+      plaid_extra_details(extra["plaid"])
     end
+
+    imported = import_extra_details(extra["import"])
+    return details if imported.nil?
+
+    # A provider's own details come first, then whatever the import added. Both
+    # label their bank-side description "Original description"; the provider's
+    # wins the named row and the import's moves to the extras so neither is lost.
+    return imported if details.nil?
+
+    kind = details[:kind]
+    named = details[kind]
+    if imported[:import][:original_description].present?
+      if named[:original_description].present?
+        imported[:provider_extras].unshift(provider_extra_row(t("transactions.show.import_field_labels.original_description"), imported[:import][:original_description]))
+      else
+        named = { original_description: imported[:import][:original_description] }.merge(named)
+      end
+    end
+
+    details.merge(kind => named, provider_extras: details[:provider_extras] + imported[:provider_extras])
+  end
+
+  # Extra that no provider claims: show the payload as JSON.
+  def transaction_extra_raw_details(extra)
+    {
+      kind: :raw,
+      simplefin: {},
+      plaid: {},
+      import: {},
+      provider_extras: [],
+      raw: pretty_json(extra)
+    }
+  end
+
+  def simplefin_extra_details(sf)
+    simple = {
+      payee: sf.is_a?(Hash) ? sf["payee"].presence : nil,
+      description: sf.is_a?(Hash) ? sf["description"].presence : nil,
+      memo: sf.is_a?(Hash) ? sf["memo"].presence : nil
+    }.compact
+
+    extras = []
+    if sf.is_a?(Hash) && sf["extra"].is_a?(Hash) && sf["extra"].present?
+      sf["extra"].each do |k, v|
+        extras.concat(provider_extra_rows(provider_extra_field_label(k), v))
+      end
+    end
+
+    # Same rule as the Plaid details. SimpleFIN always writes a pending flag, so
+    # a transaction carrying nothing else would otherwise open an Additional
+    # details section with no details in it.
+    return nil if simple.blank? && extras.blank?
+
+    {
+      kind: :simplefin,
+      simplefin: simple,
+      plaid: {},
+      import: {},
+      provider_extras: extras,
+      raw: nil
+    }
+  end
+
+  def plaid_extra_details(plaid)
+    simple = {
+      original_description: plaid.is_a?(Hash) ? plaid["original_description"].presence : nil,
+      payment_channel: plaid.is_a?(Hash) ? plaid["payment_channel"].presence : nil,
+      transaction_code: plaid.is_a?(Hash) ? plaid["transaction_code"].presence : nil
+    }.compact
+
+    extras = []
+    if plaid.is_a?(Hash)
+      if plaid["payment_meta"].is_a?(Hash) && plaid["payment_meta"].present?
+        plaid["payment_meta"].each do |k, v|
+          extras.concat(provider_extra_rows(t("transactions.show.plaid_payment_meta_label", name: provider_extra_field_label(k)), v))
+        end
+      end
+
+      if plaid["counterparties"].is_a?(Array) && plaid["counterparties"].present?
+        plaid["counterparties"].each_with_index do |counterparty, index|
+          extras.concat(provider_extra_rows(t("transactions.show.plaid_counterparty_label", index: index + 1), counterparty))
+        end
+      end
+    end
+
+    # Only show Additional details when there is something beyond pending flags
+    return nil if simple.blank? && extras.blank?
+
+    {
+      kind: :plaid,
+      simplefin: {},
+      plaid: simple,
+      import: {},
+      provider_extras: extras,
+      # No raw dump: the structured rows above already cover the payload, and
+      # the only fields they omit (pending, pending_transaction_id) are what
+      # the pending badge communicates.
+      raw: nil
+    }
+  end
+
+  # Details written through the API under extra["import"] (a history backfill, a
+  # retailer integration). The bank's original description gets the named row a
+  # provider's does; every other key becomes a labelled extras row, known keys
+  # first in a fixed order.
+  def import_extra_details(import)
+    return nil unless import.is_a?(Hash) && import.present?
+
+    known = Transaction::ImportExtra::KNOWN_KEYS
+    ordered = import.reject { |key, _| key == "original_description" }
+      .sort_by { |key, _| [ known.index(key) || known.size, key ] }
+
+    extras = ordered.flat_map do |key, value|
+      label = t("transactions.show.import_field_labels.#{key}", default: provider_extra_field_label(key))
+      provider_extra_rows(label, value)
+    end
+    simple = { original_description: import["original_description"].presence }.compact
+
+    return nil if simple.blank? && extras.blank?
+
+    {
+      kind: :import,
+      simplefin: {},
+      plaid: {},
+      import: simple,
+      provider_extras: extras,
+      raw: nil
+    }
   end
 
   # Flatten hashes into labeled rows; pretty-print remaining nested structures.
