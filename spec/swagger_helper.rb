@@ -892,6 +892,9 @@ RSpec.configure do |config|
               source: { type: :string, nullable: true },
               user_modified: { type: :boolean },
               classification: { type: :string },
+              split_role: { type: :string, enum: %w[parent child], nullable: true, description: 'parent for a split transaction, child for one of its parts, null otherwise' },
+              split_parent_id: { type: :string, format: :uuid, nullable: true, description: 'For a child, the transaction it was split from' },
+              split_child_ids: { type: :array, items: { type: :string, format: :uuid }, description: 'For a split parent, the ids of its children' },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },
               merchant: { '$ref' => '#/components/schemas/Merchant', nullable: true },
@@ -902,6 +905,14 @@ RSpec.configure do |config|
               transfer: { '$ref' => '#/components/schemas/Transfer', nullable: true },
               created_at: { type: :string, format: :'date-time' },
               updated_at: { type: :string, format: :'date-time' }
+            }
+          },
+          TransactionSplit: {
+            type: :object,
+            required: %w[parent children],
+            properties: {
+              parent: { '$ref' => '#/components/schemas/Transaction' },
+              children: { type: :array, items: { '$ref' => '#/components/schemas/Transaction' } }
             }
           },
           TransactionCollection: {

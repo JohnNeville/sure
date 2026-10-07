@@ -22,6 +22,13 @@ json.source transaction.entry.source
 json.user_modified transaction.entry.user_modified
 json.classification transaction.entry.classification
 
+# Split state: a split parent lists its children, a child names its parent.
+# Both are transaction ids. Neither is set on an ordinary transaction.
+entry = transaction.entry
+json.split_role(entry.split_child? ? "child" : (entry.child_entries.any? ? "parent" : nil))
+json.split_parent_id entry.split_child? ? entry.parent_entry&.entryable_id : nil
+json.split_child_ids entry.child_entries.map(&:entryable_id)
+
 # Account information
 json.account do
   json.id transaction.entry.account.id
