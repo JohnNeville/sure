@@ -83,7 +83,7 @@ module TransactionsHelper
 
     extra = tx.extra
     return transaction_extra_raw_details(extra) unless extra.is_a?(Hash) &&
-      (extra["simplefin"].present? || extra["plaid"].present? || extra["import"].present?)
+      (extra["simplefin"].present? || extra["plaid"].present? || extra["import"].present? || extra["retail"].present?)
 
     details = if extra["simplefin"].present?
       simplefin_extra_details(extra["simplefin"])
@@ -91,25 +91,11 @@ module TransactionsHelper
       plaid_extra_details(extra["plaid"])
     end
 
-    imported = import_extra_details(extra["import"])
-    return details if imported.nil?
-
-    # A provider's own details come first, then whatever the import added. Both
-    # label their bank-side description "Original description"; the provider's
-    # wins the named row and the import's moves to the extras so neither is lost.
-    return imported if details.nil?
-
-    kind = details[:kind]
-    named = details[kind]
-    if imported[:import][:original_description].present?
-      if named[:original_description].present?
-        imported[:provider_extras].unshift(provider_extra_row(t("transactions.show.import_field_labels.original_description"), imported[:import][:original_description]))
-      else
-        named = { original_description: imported[:import][:original_description] }.merge(named)
-      end
+    # A provider's own details come first, then whatever clients added under
+    # import and retail.
+    [ import_extra_details(extra["import"]), retail_extra_details(extra["retail"]) ].compact.reduce(details) do |combined, addition|
+      combined.nil? ? addition : merge_extra_details(combined, addition)
     end
-
-    details.merge(kind => named, provider_extras: details[:provider_extras] + imported[:provider_extras])
   end
 
   # Extra that no provider claims: show the payload as JSON.
@@ -198,7 +184,7 @@ module TransactionsHelper
   def import_extra_details(import)
     return nil unless import.is_a?(Hash) && import.present?
 
-    known = Transaction::ImportExtra::KNOWN_KEYS
+    known = Transaction::ClientExtra::KNOWN_KEYS.fetch("import")
     ordered = import.reject { |key, _| key == "original_description" }
       .sort_by { |key, _| [ known.index(key) || known.size, key ] }
 
@@ -218,6 +204,72 @@ module TransactionsHelper
       provider_extras: extras,
       raw: nil
     }
+  end
+
+  # Appends one client-written section to the details built so far. Both the
+  # provider and an import can carry a bank-side "Original description"; the
+  # first one keeps the named row and the other moves to the extras so neither
+  # is lost.
+  def merge_extra_details(base, addition)
+    kind = base[:kind]
+    named = base[kind] || {}
+    extras = addition[:provider_extras].dup
+    description = addition.dig(:import, :original_description)
+
+    if description.present?
+      if named[:original_description].present?
+        extras.unshift(provider_extra_row(t("transactions.show.import_field_labels.original_description"), description))
+      else
+        named = { original_description: description }.merge(named)
+      end
+    end
+
+    base.merge(kind => named, provider_extras: base[:provider_extras] + extras)
+  end
+
+  # An order pushed under extra["retail"] by a retailer integration: the order's
+  # own fields as labelled rows (known keys first), then one row per item.
+  def retail_extra_details(retail)
+    return nil unless retail.is_a?(Hash) && retail.present?
+
+    known = Transaction::ClientExtra::KNOWN_KEYS.fetch("retail")
+    fields = retail.except("items")
+      .sort_by { |key, _| [ known.index(key) || known.size, key ] }
+
+    extras = fields.flat_map do |key, value|
+      label = t("transactions.show.retail_field_labels.#{key}", default: provider_extra_field_label(key))
+      provider_extra_rows(label, value)
+    end
+
+    Array(retail["items"]).each_with_index do |item, index|
+      summary = retail_item_summary(item)
+      extras << provider_extra_row(t("transactions.show.retail_item_label", index: index + 1), summary) if summary.present?
+    end
+
+    return nil if extras.blank?
+
+    {
+      kind: :retail,
+      simplefin: {},
+      plaid: {},
+      import: {},
+      provider_extras: extras,
+      raw: nil
+    }
+  end
+
+  # "Title × 2 · $11.50", falling back to whatever fields the item has.
+  def retail_item_summary(item)
+    return item.to_s.presence unless item.is_a?(Hash)
+
+    title = item["title"].presence || item["name"].presence
+    quantity = item["quantity"].presence
+    price = (item["price"] || item["unit_price"]).presence
+    detail = [ ("× #{quantity}" if quantity), price ].compact.join(" · ")
+    text = [ title, detail.presence ].compact.join(" ")
+    return text if text.present?
+
+    item.except("title", "name", "quantity", "price", "unit_price").values.compact_blank.join(", ")
   end
 
   # Flatten hashes into labeled rows; pretty-print remaining nested structures.

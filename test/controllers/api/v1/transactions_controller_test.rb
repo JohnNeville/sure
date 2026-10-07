@@ -1179,7 +1179,7 @@ end
           headers: api_headers(@api_key), as: :json
 
     assert_response :unprocessable_entity
-    assert_match(/only accepts the "import" key/, JSON.parse(response.body)["message"])
+    assert_match(/only accepts the "import" and "retail" keys/, JSON.parse(response.body)["message"])
     assert_equal({ "plaid" => { "payment_channel" => "online" } }, @transaction.reload.extra)
     assert_not_equal "Should not apply", @transaction.entry.name
   end
@@ -1225,6 +1225,90 @@ end
           headers: api_headers(@read_only_api_key)
 
     assert_response :forbidden
+  end
+
+  # extra.retail: an order behind a charge, pushed by a retailer integration
+
+  test "create stores extra.retail with its items" do
+    post api_v1_transactions_url,
+         params: { transaction: {
+           account_id: @account.id, name: "AMZN Mktp US*2K1AB3C0", amount: 31.5, date: Date.current, currency: "USD", nature: "expense",
+           extra: { retail: {
+             retailer: "Amazon", order_number: "111-2223334-5556667", order_total: "31.50",
+             items: [
+               { title: "USB-C cable", quantity: 2, price: "9.99", asin: "B000TEST01" },
+               { title: "Desk lamp", quantity: 1, price: "11.52" }
+             ]
+           } }
+         } },
+         headers: api_headers(@api_key), as: :json
+
+    assert_response :created
+    retail = JSON.parse(response.body).dig("extra", "retail")
+    assert_equal "Amazon", retail["retailer"]
+    assert_equal [ "USB-C cable", "Desk lamp" ], retail["items"].map { |item| item["title"] }
+    assert_equal "2", retail["items"].first["quantity"]
+    assert_equal "B000TEST01", retail["items"].first["asin"]
+  end
+
+  test "retail and import coexist and leave provider keys alone" do
+    @transaction.update!(extra: { "plaid" => { "payment_channel" => "online" } })
+
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { extra: { import: { source: "Quicken" }, retail: { retailer: "Amazon" } } } },
+          headers: api_headers(@api_key), as: :json
+
+    assert_response :success
+    assert_equal(
+      { "plaid" => { "payment_channel" => "online" }, "import" => { "source" => "Quicken" }, "retail" => { "retailer" => "Amazon" } },
+      @transaction.reload.extra
+    )
+  end
+
+  test "sending retail items replaces the list while other retail keys merge" do
+    @transaction.update!(extra: { "retail" => { "retailer" => "Amazon", "items" => [ { "title" => "Old" } ] } })
+
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { extra: { retail: { order_number: "1", items: [ { title: "New" } ] } } } },
+          headers: api_headers(@api_key), as: :json
+
+    assert_response :success
+    assert_equal(
+      { "retailer" => "Amazon", "order_number" => "1", "items" => [ { "title" => "New" } ] },
+      @transaction.reload.extra["retail"]
+    )
+  end
+
+  test "retail items null removes the list and retail null clears the namespace" do
+    @transaction.update!(extra: { "retail" => { "retailer" => "Amazon", "items" => [ { "title" => "Old" } ] } })
+
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { extra: { retail: { items: nil } } } },
+          headers: api_headers(@api_key), as: :json
+    assert_equal({ "retailer" => "Amazon" }, @transaction.reload.extra["retail"])
+
+    patch api_v1_transaction_url(@transaction),
+          params: { transaction: { extra: { retail: nil } } },
+          headers: api_headers(@api_key), as: :json
+    assert_response :success
+    assert_not @transaction.reload.extra.key?("retail")
+  end
+
+  test "retail items must be a list of flat objects within the limits" do
+    [
+      { retail: { items: "nope" } },
+      { retail: { items: [ "nope" ] } },
+      { retail: { items: [ { title: { nested: "x" } } ] } },
+      { retail: { items: [ { "Bad Key" => "x" } ] } },
+      { retail: { items: Array.new(Transaction::ClientExtra::MAX_ITEMS + 1) { { title: "x" } } } },
+      { import: { items: [ { title: "x" } ] } }
+    ].each do |bad_extra|
+      patch api_v1_transaction_url(@transaction),
+            params: { transaction: { extra: bad_extra } },
+            headers: api_headers(@api_key), as: :json
+
+      assert_response :unprocessable_entity, "expected #{bad_extra.to_json[0, 80]} to be rejected"
+    end
   end
 
   private

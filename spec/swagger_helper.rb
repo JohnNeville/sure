@@ -898,7 +898,7 @@ RSpec.configure do |config|
               extra: {
                 type: :object,
                 additionalProperties: true,
-                description: 'Provider and import details. Keys are provider-defined (for example plaid or simplefin, written by bank sync) plus import, the only namespace API clients can write.'
+                description: 'Provider and import details. Keys are provider-defined (for example plaid or simplefin, written by bank sync) plus import and retail, the namespaces API clients can write.'
               },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },

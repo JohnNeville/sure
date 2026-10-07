@@ -147,6 +147,20 @@ en:
         original_category: "Original category"
         source: "Imported from"
         source_account: "Source account"
+      # Labels for the order details clients store under extra["retail"].
+      retail_item_label: "Item %{index}"
+      retail_field_labels:
+        retailer: "Retailer"
+        order_number: "Order number"
+        order_date: "Order date"
+        order_url: "Order URL"
+        status: "Order status"
+        order_total: "Order total"
+        subtotal: "Subtotal"
+        shipping: "Shipping"
+        tax: "Tax"
+        discounts: "Discounts"
+        payment_last4: "Card last 4"
       plaid_counterparty_label: "Counterparty %{index}"
       # Provider field names. The set is open-ended — anything not listed falls
       # back to a humanized form of the provider's own identifier.
