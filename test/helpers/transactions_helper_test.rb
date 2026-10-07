@@ -199,4 +199,40 @@ class TransactionsHelperTest < ActionView::TestCase
     assert_equal :import, details[:kind]
     assert_equal [ "Imported from" ], details[:provider_extras].map { |row| row[:key] }
   end
+
+  test "renders extra.retail as order rows followed by one row per item" do
+    details = build_transaction_extra_details(transaction_with({
+      "retail" => {
+        "order_total" => "31.50",
+        "retailer" => "Amazon",
+        "order_number" => "111-2223334-5556667",
+        "items" => [
+          { "title" => "USB-C cable", "quantity" => "2", "price" => "9.99" },
+          { "title" => "Desk lamp" },
+          { "asin" => "B000TEST01" }
+        ]
+      }
+    }))
+
+    assert_equal :retail, details[:kind]
+    assert_equal [ "Retailer", "Order number", "Order total", "Item 1", "Item 2", "Item 3" ], details[:provider_extras].map { |row| row[:key] }
+    assert_equal "USB-C cable × 2 · 9.99", details[:provider_extras].find { |row| row[:key] == "Item 1" }[:value]
+    assert_equal "Desk lamp", details[:provider_extras].find { |row| row[:key] == "Item 2" }[:value]
+    assert_equal "B000TEST01", details[:provider_extras].find { |row| row[:key] == "Item 3" }[:value]
+  end
+
+  test "retail details follow the provider's and the import's" do
+    details = build_transaction_extra_details(transaction_with({
+      "plaid" => { "original_description" => "AMZN MKTP", "payment_channel" => "online" },
+      "import" => { "source" => "Quicken" },
+      "retail" => { "retailer" => "Amazon" }
+    }))
+
+    assert_equal :plaid, details[:kind]
+    assert_equal [ "Imported from", "Retailer" ], details[:provider_extras].map { |row| row[:key] }
+  end
+
+  test "retail alone with nothing to show yields no details" do
+    assert_nil build_transaction_extra_details(transaction_with({ "retail" => { "retailer" => " ", "items" => [] } }))
+  end
 end

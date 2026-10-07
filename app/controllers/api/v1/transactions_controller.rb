@@ -344,7 +344,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     def validate_import_extra
       return unless extra_provided?
 
-      import_extra = Transaction::ImportExtra.new(params.dig(:transaction, :extra))
+      import_extra = Transaction::ClientExtra.new(params.dig(:transaction, :extra))
       import_extra.apply_to(@entry&.transaction&.extra) if import_extra.valid?
       return if import_extra.valid?
 
@@ -358,7 +358,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     def apply_import_extra(transaction)
       return unless extra_provided?
 
-      merged = Transaction::ImportExtra.new(params.dig(:transaction, :extra)).apply_to(transaction.extra)
+      merged = Transaction::ClientExtra.new(params.dig(:transaction, :extra)).apply_to(transaction.extra)
       transaction.update!(extra: merged) unless merged == transaction.extra
     end
 
