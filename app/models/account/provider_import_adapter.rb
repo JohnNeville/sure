@@ -778,8 +778,13 @@ class Account::ProviderImportAdapter
     # 5. Entry type is Transaction (not Trade or Valuation)
     # 6. Optionally same name (if name parameter is provided)
     # 7. Not in the excluded IDs list (if provided)
+    # 8. Not a split child. Children are created without an external_id, so they
+    #    would otherwise qualify, and a new bank row could be linked to one
+    #    instead of becoming its own transaction. The split parent keeps its own
+    #    external_id and stays matchable, which is the row a sync should reconcile.
     query = account.entries
                    .where(entryable_type: "Transaction")
+                   .where(parent_entry_id: nil)
                    .where(amount: amount)
                    .where(currency: currency)
 
