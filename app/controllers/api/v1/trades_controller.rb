@@ -238,6 +238,7 @@ class Api::V1::TradesController < Api::V1::BaseController
         is_sell = type_or_nature.present? ? trade_sell_from_type_or_nature?(type_or_nature) : @trade.qty.negative?
         signed_qty = is_sell ? -qty.to_d.abs : qty.to_d.abs
         entry_params[:entryable_attributes][:qty] = signed_qty
+        entry_params[:entryable_attributes][:price] = price.to_d
         entry_params[:amount] = signed_qty * price.to_d
         ticker = @trade.security&.ticker
         entry_params[:name] = Trade.build_name(is_sell ? "sell" : "buy", signed_qty.abs, ticker) if ticker.present?
