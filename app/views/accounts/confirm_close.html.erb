@@ -1,0 +1,36 @@
+<%= render DS::Dialog.new do |dialog| %>
+  <% dialog.with_header(title: t("accounts.confirm_close.title", name: @account.name)) %>
+
+  <% dialog.with_body do %>
+    <p class="text-secondary text-sm mb-4">
+      <%= t("accounts.confirm_close.description") %>
+    </p>
+
+    <div class="mb-4">
+      <%= render DS::Alert.new(title: t("accounts.confirm_close.warning_title"), variant: :info) do %>
+        <ul class="list-disc list-inside">
+          <li><%= t("accounts.confirm_close.history_kept") %></li>
+          <li><%= t("accounts.confirm_close.nothing_after") %></li>
+          <li><%= t("accounts.confirm_close.zero_after") %></li>
+          <li><%= t("accounts.confirm_close.no_sync") %></li>
+          <% if @account.linked? %>
+            <li><%= t("accounts.confirm_close.linked_hint") %></li>
+          <% end %>
+        </ul>
+      <% end %>
+    </div>
+
+    <%= styled_form_with url: close_account_path(@account), method: :patch, class: "space-y-4", data: { turbo_frame: "_top" } do |form| %>
+      <%= form.date_field :closed_on,
+            label: t("accounts.confirm_close.date_label"),
+            value: @closed_on,
+            max: Date.current,
+            required: true %>
+
+      <%= render DS::Button.new(
+        text: t("accounts.confirm_close.confirm_button"),
+        type: :submit,
+        full_width: true) %>
+    <% end %>
+  <% end %>
+<% end %>

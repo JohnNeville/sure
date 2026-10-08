@@ -12,7 +12,7 @@ class Api::V1::TradesController < Api::V1::BaseController
 
   def index
     family = current_resource_owner.family
-    trades_query = family.trades.visible
+    trades_query = family.trades.reportable
 
     trades_query = apply_filters(accessible_trades)
     trades_query = trades_query.includes({ entry: :account }, :security, :category, :lot_source_entry).reverse_chronological
@@ -42,7 +42,9 @@ class Api::V1::TradesController < Api::V1::BaseController
       return render_validation_error("Account ID is required", [ "Account ID is required" ])
     end
 
-    account = current_resource_owner.family.accounts.writable_by(current_resource_owner).visible.find(trade_params[:account_id])
+    # Closed accounts are found too: a trade up to the closed date is still allowed,
+    # and anything after it is rejected by the entry's own date check.
+    account = current_resource_owner.family.accounts.writable_by(current_resource_owner).reportable.find(trade_params[:account_id])
 
     unless account.supports_trades?
       return render_validation_error(
@@ -142,7 +144,7 @@ class Api::V1::TradesController < Api::V1::BaseController
     # Trades on accounts the caller can at least read.
     def accessible_trades
       family = current_resource_owner.family
-      family.trades.visible
+      family.trades.reportable
         .where(entries: { account_id: family.accounts.accessible_by(current_resource_owner).select(:id) })
     end
 

@@ -63,10 +63,19 @@ class Api::V1::AccountsController < Api::V1::BaseController
       scope = current_resource_owner.family.accounts
                                     .accessible_by(current_resource_owner)
                                     .includes(:accountable, account_providers: :provider)
-      include_disabled_accounts? ? scope : scope.visible
+      return scope if include_disabled_accounts?
+      return scope.reportable if include_closed_accounts?
+
+      scope.visible
     end
 
     def include_disabled_accounts?
       ActiveModel::Type::Boolean.new.cast(params[:include_disabled])
+    end
+
+    # Closed accounts are history. Like the app's account list, the API leaves them
+    # out unless asked, for listing and for fetching one by id.
+    def include_closed_accounts?
+      ActiveModel::Type::Boolean.new.cast(params[:include_closed])
     end
 end
