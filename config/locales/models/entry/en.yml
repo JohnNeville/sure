@@ -5,6 +5,8 @@ en:
       models:
         entry:
           attributes:
+            date:
+              after_account_closed: is after this account was closed on %{closed_on}
             base:
               invalid_sell_quantity: cannot sell %{sell_qty} shares of %{ticker} because
                 you only own %{current_qty} shares

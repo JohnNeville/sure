@@ -10,7 +10,7 @@
   ) %>
 <% end %>
 
-<% if @manual_accounts.empty? && @financekit_accounts.empty? && @plaid_items.empty? && @simplefin_items.empty? && @lunchflow_items.empty? && @redbark_items.empty? && @akahu_items.empty? && @up_items.empty? && @monobank_items.empty? && @fio_items.empty? && @enable_banking_items.empty? && @coinstats_items.empty? && @coinbase_items.empty? && @mercury_items.empty? && @brex_items.empty? && @ibkr_items.empty? && @snaptrade_items.empty? && @indexa_capital_items.empty? && @sophtron_items.empty? && @binance_items.empty? && @kraken_items.empty? && @coinspot_items.empty? && @questrade_items.empty? && @wise_items.empty? && @onchain_wallet_items.empty? && @trade_republic_items.empty? && @trading212_items.empty? %>
+<% if @manual_accounts.empty? && @closed_accounts.empty? && @financekit_accounts.empty? && @plaid_items.empty? && @simplefin_items.empty? && @lunchflow_items.empty? && @redbark_items.empty? && @akahu_items.empty? && @up_items.empty? && @monobank_items.empty? && @fio_items.empty? && @enable_banking_items.empty? && @coinstats_items.empty? && @coinbase_items.empty? && @mercury_items.empty? && @brex_items.empty? && @ibkr_items.empty? && @snaptrade_items.empty? && @indexa_capital_items.empty? && @sophtron_items.empty? && @binance_items.empty? && @kraken_items.empty? && @coinspot_items.empty? && @questrade_items.empty? && @wise_items.empty? && @onchain_wallet_items.empty? && @trade_republic_items.empty? && @trading212_items.empty? %>
   <%= render "empty" %>
 <% else %>
   <div class="space-y-2">
@@ -130,6 +130,15 @@
       </div>
     <% else %>
       <div id="manual-accounts"></div>
+    <% end %>
+
+    <% if @closed_accounts.any? %>
+      <%# Closed accounts keep their history but are out of the way: collapsed by default. %>
+      <%= render DS::Disclosure.new(title: t(".closed_accounts", count: @closed_accounts.size), open: false) do %>
+        <div class="space-y-2 pt-2">
+          <%= render "accounts/index/account_groups", accounts: @closed_accounts, show_closed: true %>
+        </div>
+      <% end %>
     <% end %>
   </div>
 <% end %>

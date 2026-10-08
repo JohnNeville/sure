@@ -167,7 +167,7 @@ class Budget < ApplicationRecord
   # the pre-personal-budgets behavior: whatever the requesting viewer can
   # see, since it has no single owner to scope by.
   def transactions
-    scope = family.transactions.visible.in_period(period)
+    scope = family.transactions.reportable.in_period(period)
 
     if user_id.present?
       scope = scope.joins(:entry).where(entries: { account_id: family.accounts.where(owner_id: user_id).included_in_reports.select(:id) })

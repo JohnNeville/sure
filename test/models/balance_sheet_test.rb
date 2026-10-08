@@ -97,6 +97,26 @@ class BalanceSheetTest < ActiveSupport::TestCase
     assert_equal BalanceSheet.new(@family).net_worth, values_by_date.fetch(period.end_date).value.amount
   end
 
+  test "net worth series counts a closed account up to its closed date and not after" do
+    period = Period.custom(start_date: Date.current - 2.days, end_date: Date.current)
+    open_account = create_account(balance: 1_000, accountable: Depository.new)
+    closed_account = create_account(balance: 0, accountable: Depository.new)
+
+    [ period.start_date, period.start_date + 1.day, period.end_date ].each do |date|
+      create_balance(account: open_account, date: date, balance: 1_000)
+      create_balance(account: closed_account, date: date, balance: 500)
+    end
+    closed_account.close_on!(period.start_date + 1.day)
+
+    series = BalanceSheet.new(@family).net_worth_series(period: period)
+    values_by_date = series.values.index_by(&:date)
+
+    assert_equal 1_500, values_by_date.fetch(period.start_date).value.amount
+    assert_equal 1_500, values_by_date.fetch(period.start_date + 1.day).value.amount, "the closed date itself still counts"
+    assert_equal 1_000, values_by_date.fetch(period.end_date).value.amount, "after it the account contributes nothing"
+    assert_equal 1_000, BalanceSheet.new(@family).net_worth
+  end
+
   test "historical account scope respects shared-account finance settings" do
     member = users(:new_email)
     included_account = create_account(balance: 0, accountable: Depository.new)

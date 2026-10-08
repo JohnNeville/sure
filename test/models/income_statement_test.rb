@@ -103,6 +103,21 @@ class IncomeStatementTest < ActiveSupport::TestCase
     assert_equal expected_total_income, income_totals.category_totals.find { |ct| ct.category.id == @income_category.id }.total
   end
 
+  test "a closed account's transactions still count in reports, a disabled one's do not" do
+    closed_account = @family.accounts.create! name: "Closed card", currency: @family.currency, balance: 0, accountable: CreditCard.new
+    disabled_account = @family.accounts.create! name: "Disabled card", currency: @family.currency, balance: 0, accountable: CreditCard.new
+    create_transaction(account: closed_account, amount: 50, category: @groceries_category)
+    create_transaction(account: disabled_account, amount: 70, category: @groceries_category)
+    closed_account.close_on!(Date.current)
+    disabled_account.disable!
+
+    totals = IncomeStatement.new(@family).totals(date_range: Period.last_30_days.date_range)
+
+    assert_equal Money.new(200 + 300 + 400 + 50, @family.currency), totals.expense_money
+    assert_includes IncomeStatement.new(@family).eligible_accounts, closed_account
+    assert_not_includes IncomeStatement.new(@family).eligible_accounts, disabled_account
+  end
+
   test "totals_for scopes totals to a period and optional account ids" do
     income_statement = IncomeStatement.new(@family)
     period = Period.last_30_days

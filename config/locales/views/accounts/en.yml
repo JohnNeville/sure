@@ -16,6 +16,9 @@ en:
       troubleshoot: Troubleshoot
       enable: Enable account
       disable: Disable account
+      close: Close account
+      reopen: Reopen account
+      closed_on: "Closed %{date}"
       exclude_from_reports: Exclude from all reports
       include_in_reports: Include in reports
       excluded_from_reports_indicator: Excluded from reports
@@ -55,6 +58,9 @@ en:
       enable_category_matcher_hint: When enabled, the provider's suggested category is applied to imported transactions. Disable to leave new transactions uncategorized.
     index:
       accounts: Accounts
+      closed_accounts:
+        one: "1 closed account"
+        other: "%{count} closed accounts"
       financekit_accounts:
         title: Apple Wallet
         description: Manage Apple Wallet connections and sync in the Sure iOS app.
@@ -124,6 +130,7 @@ en:
           will have a direct impact on your net worth calculations and the account
           graphs.</p><br /> <p>After deletion, there is no way you'll be able to restore
           the account information because you'll need to add it as a new account.</p>"
+        close_account: Close account
         confirm_title: Delete account?
         delete_account: Delete account
         edit: Edit
@@ -131,6 +138,7 @@ en:
         import_trades: Import trades
         import_transactions: Import transactions
         manage: Manage accounts
+        reopen_account: Reopen account
         sharing: Sharing
         statements: Statements
         exclude_from_reports: Exclude from all reports
@@ -189,6 +197,25 @@ en:
       eu: Europe
       in: India
       generic: General
+    confirm_close:
+      title: "Close %{name}?"
+      description: Closing marks the account as over as of a date you choose. You can reopen it later.
+      warning_title: What this means
+      history_kept: Its transactions, trades and balances up to that date are kept and still count in reports and charts.
+      nothing_after: Nothing dated after that date can be added to it, by hand, import or the API.
+      zero_after: From that date on it counts as $0 in net worth.
+      no_sync: It stops syncing.
+      linked_hint: It stays linked to its provider, which may report errors for anything newer. Unlink it from the provider if the connection is no longer needed.
+      date_label: Last day the account was open
+      confirm_button: Close account
+    close:
+      success: "%{name} closed as of %{date}."
+      future_date: The closed date cannot be in the future.
+      invalid_date: That is not a valid date.
+      cannot_close: This account cannot be closed.
+    reopen:
+      success: "%{name} reopened."
+      cannot_reopen: Only a closed account can be reopened.
     confirm_unlink:
       title: Unlink account from provider?
       description_html: "You are about to unlink <strong>%{account_name}</strong> from <strong>%{provider_name}</strong>. This will convert it to a manual account."
