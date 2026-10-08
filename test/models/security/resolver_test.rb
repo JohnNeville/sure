@@ -276,4 +276,55 @@ class Security::ResolverTest < ActiveSupport::TestCase
     assert resolved.persisted?
     assert_equal "XWAR", resolved.exchange_operating_mic
   end
+
+  # Manually priced securities: nothing the resolver does may attach a provider or
+  # bring one online.
+  test "a manually priced security is returned as is, by ticker alone" do
+    manual = Security.create!(ticker: "FUSVX", name: "Premium class", offline: true, offline_reason: Security::OFFLINE_REASON_MANUAL, country_code: "US")
+
+    Security.expects(:search_provider).never
+
+    resolved = Security::Resolver.new("FUSVX").resolve
+
+    assert_equal manual, resolved
+    manual.reload
+    assert manual.offline?
+    assert_equal Security::OFFLINE_REASON_MANUAL, manual.offline_reason
+    assert_nil manual.price_provider
+  end
+
+  test "an explicit provider pick or an enabled provider does not turn a manually priced security back on" do
+    manual = Security.create!(ticker: "PF7O", exchange_operating_mic: "XNAS", offline: true, offline_reason: Security::OFFLINE_REASON_MANUAL, country_code: "US")
+    Setting.stubs(:enabled_securities_providers).returns([ "twelve_data" ])
+    Security.any_instance.stubs(:price_data_provider).returns(mock)
+
+    resolved = Security::Resolver.new("PF7O", exchange_operating_mic: "XNAS", country_code: "US", price_provider: "twelve_data").resolve
+
+    assert_equal manual, resolved
+    manual.reload
+    assert manual.offline?
+    assert_equal Security::OFFLINE_REASON_MANUAL, manual.offline_reason
+    assert_nil manual.price_provider
+  end
+
+  test "the offline fallback leaves a manually priced security's details alone" do
+    manual = Security.create!(ticker: "IIAXX", offline: true, offline_reason: Security::OFFLINE_REASON_MANUAL, country_code: "US")
+    Security.stubs(:search_provider).returns([])
+
+    resolved = Security::Resolver.new("IIAXX", exchange_operating_mic: nil, country_code: nil).resolve
+
+    assert_equal manual, resolved
+    assert_equal "US", manual.reload.country_code
+    assert_equal Security::OFFLINE_REASON_MANUAL, manual.offline_reason
+  end
+
+  test "a security taken offline by a disabled provider still comes back online" do
+    security = Security.create!(ticker: "RETURNS", exchange_operating_mic: "XNAS", price_provider: "twelve_data", offline: true, offline_reason: "provider_disabled", country_code: "US")
+    Setting.stubs(:enabled_securities_providers).returns([ "twelve_data" ])
+    Security.any_instance.stubs(:price_data_provider).returns(mock)
+
+    Security::Resolver.new("RETURNS", exchange_operating_mic: "XNAS", country_code: "US").resolve
+
+    assert_not security.reload.offline?
+  end
 end

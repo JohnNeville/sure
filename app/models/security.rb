@@ -97,8 +97,17 @@ class Security < ApplicationRecord
   validates :asset_sub_class, inclusion: { in: ASSET_SUB_CLASSES }, allow_nil: true
   validates :classification_source, inclusion: { in: CLASSIFICATION_SOURCES }, allow_nil: true
 
+  # Why a security is offline when its prices are loaded by hand: no provider can
+  # quote it (a retired share class, a collective trust, a CUSIP-only position),
+  # so the health check, the daily market-data import and provider toggles all
+  # leave it alone and its stored prices are the only ones there are.
+  OFFLINE_REASON_MANUAL = "manual".freeze
+
   scope :online, -> { where(offline: false) }
   scope :standard, -> { where(kind: "standard") }
+  scope :manual_prices, -> { where(offline_reason: OFFLINE_REASON_MANUAL) }
+  # NULL-safe: `offline_reason != 'manual'` alone would drop every row with no reason.
+  scope :excluding_manual_prices, -> { where(offline_reason: nil).or(where.not(offline_reason: OFFLINE_REASON_MANUAL)) }
 
   # Parses the combobox ID format "SYMBOL|EXCHANGE|PROVIDER" into a hash.
   def self.parse_combobox_id(value)
@@ -123,6 +132,28 @@ class Security < ApplicationRecord
 
   def cash?
     kind == "cash"
+  end
+
+  def manual_prices?
+    offline_reason == OFFLINE_REASON_MANUAL
+  end
+
+  # Takes the security off every automatic price path: offline, no provider, and
+  # exempt from health checks. Prices already stored are kept.
+  def enable_manual_prices!
+    update!(
+      offline: true,
+      offline_reason: OFFLINE_REASON_MANUAL,
+      price_provider: nil,
+      failed_fetch_count: 0,
+      failed_fetch_at: nil
+    )
+  end
+
+  # Clears the manual state. The security stays offline until a health check or an
+  # admin decides otherwise, since nothing says a provider can price it.
+  def disable_manual_prices!
+    update!(offline_reason: nil) if manual_prices?
   end
 
   # True when this security represents a crypto asset. Today the only signal

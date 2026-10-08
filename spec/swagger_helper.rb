@@ -1686,6 +1686,7 @@ RSpec.configure do |config|
               exchange_name: { type: :string, nullable: true },
               offline: { type: :boolean },
               offline_reason: { type: :string, nullable: true },
+              manual_prices: { type: :boolean, description: 'True when the security\'s prices are loaded by hand (offline_reason is manual)' },
               website_url: { type: :string, nullable: true },
               logo_url: { type: :string, nullable: true },
               first_provider_price_on: { type: :string, format: :date, nullable: true },

@@ -174,9 +174,95 @@ class Api::V1::SecuritiesControllerTest < ActionDispatch::IntegrationTest
     api_key_without_read&.destroy
   end
 
+  # --- manual prices ---
+
+  test "update turns manual prices on: offline, manual reason, no provider" do
+    @holding_security.update!(price_provider: "twelve_data", offline: false)
+
+    patch api_v1_security_url(@holding_security),
+          params: { security: { manual_prices: true } },
+          headers: api_headers(write_key_for(@user)), as: :json
+
+    assert_response :success
+    body = JSON.parse(response.body)
+    assert_equal true, body["manual_prices"]
+    assert_equal true, body["offline"]
+    assert_equal "manual", body["offline_reason"]
+    assert_nil @holding_security.reload.price_provider
+    assert_equal 0, @holding_security.failed_fetch_count
+  end
+
+  test "update turns manual prices off and leaves the security offline, keeping its prices" do
+    @holding_security.enable_manual_prices!
+    price = Security::Price.create!(security: @holding_security, date: Date.current - 400.days, price: 10, currency: "USD")
+
+    patch api_v1_security_url(@holding_security),
+          params: { security: { manual_prices: false } },
+          headers: api_headers(write_key_for(@user)), as: :json
+
+    assert_response :success
+    @holding_security.reload
+    assert_equal false, JSON.parse(response.body)["manual_prices"]
+    assert @holding_security.offline?
+    assert_nil @holding_security.offline_reason
+    assert Security::Price.exists?(price.id)
+  end
+
+  test "turning manual prices off for a security that is not manual changes nothing" do
+    @holding_security.update!(offline: true, offline_reason: "health_check_failed")
+
+    patch api_v1_security_url(@holding_security),
+          params: { security: { manual_prices: false } },
+          headers: api_headers(write_key_for(@user)), as: :json
+
+    assert_response :success
+    assert_equal "health_check_failed", @holding_security.reload.offline_reason
+  end
+
+  test "update validates the flag, needs write scope and admin, and only reaches the family's own securities" do
+    patch api_v1_security_url(@holding_security), params: { security: { manual_prices: "maybe" } },
+          headers: api_headers(write_key_for(@user)), as: :json
+    assert_response :unprocessable_entity
+
+    patch api_v1_security_url(@holding_security), params: { security: {} },
+          headers: api_headers(write_key_for(@user)), as: :json
+    assert_response :unprocessable_entity
+
+    patch api_v1_security_url(@holding_security), params: { security: { manual_prices: true } },
+          headers: api_headers(@api_key), as: :json
+    assert_response :forbidden, "a read key cannot change a security"
+
+    patch api_v1_security_url(@holding_security), params: { security: { manual_prices: true } },
+          headers: api_headers(write_key_for(users(:family_member))), as: :json
+    assert_response :forbidden, "only an admin can change how a security is priced"
+
+    patch api_v1_security_url(@unreferenced_security), params: { security: { manual_prices: true } },
+          headers: api_headers(write_key_for(@user)), as: :json
+    assert_response :not_found
+    patch api_v1_security_url(@other_security), params: { security: { manual_prices: true } },
+          headers: api_headers(write_key_for(@user)), as: :json
+    assert_response :not_found
+    assert_not @other_security.reload.manual_prices?
+  end
+
+  test "index filters manually priced securities" do
+    @holding_security.enable_manual_prices!
+
+    get api_v1_securities_url, params: { manual_prices: true }, headers: api_headers(@api_key)
+    assert_equal [ @holding_security.id ], JSON.parse(response.body)["securities"].map { |s| s["id"] }
+
+    get api_v1_securities_url, params: { manual_prices: false }, headers: api_headers(@api_key)
+    assert_not_includes JSON.parse(response.body)["securities"].map { |s| s["id"] }, @holding_security.id
+  end
+
   private
 
     def api_headers(api_key)
       { "X-Api-Key" => api_key.plain_key }
+    end
+
+    def write_key_for(user, name: "Write Key")
+      user.api_keys.active.where.not(id: @api_key.id).destroy_all
+      ApiKey.create!(user: user, name: name, scopes: [ "read_write" ], source: "mobile", display_key: "test_rw_#{SecureRandom.hex(8)}")
     end
 end

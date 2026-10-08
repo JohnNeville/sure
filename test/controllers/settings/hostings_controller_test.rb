@@ -1110,6 +1110,27 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
     Setting.securities_providers = ""
   end
 
+
+  test "enabling or disabling a provider leaves manually priced securities alone" do
+    with_self_hosting do
+      manual = Security.create!(ticker: "MANUALPF", offline: true, offline_reason: Security::OFFLINE_REASON_MANUAL, price_provider: nil)
+      Setting.securities_providers = "twelve_data,tiingo"
+
+      patch settings_hosting_url, params: { setting: { securities_providers: [ "twelve_data" ] } }
+      manual.reload
+      assert manual.offline?
+      assert_equal Security::OFFLINE_REASON_MANUAL, manual.offline_reason
+
+      patch settings_hosting_url, params: { setting: { securities_providers: [ "twelve_data", "tiingo" ] } }
+      manual.reload
+      assert manual.offline?, "adding a provider must not bring a manually priced security online"
+      assert_equal Security::OFFLINE_REASON_MANUAL, manual.offline_reason
+      assert_nil manual.price_provider
+    end
+  ensure
+    Setting.securities_providers = ""
+  end
+
   test "unchecking every securities provider does not re-enable twelve_data via the legacy fallback" do
     with_self_hosting do
       # Start from the out-of-the-box default (only twelve_data enabled)

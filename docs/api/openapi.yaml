@@ -3113,6 +3113,10 @@ components:
         offline_reason:
           type: string
           nullable: true
+        manual_prices:
+          type: boolean
+          description: True when the security's prices are loaded by hand (offline_reason
+            is manual)
         website_url:
           type: string
           nullable: true
@@ -8890,6 +8894,13 @@ paths:
         description: Filter by offline status. When supplied, must be true or false.
         schema:
           type: boolean
+      - name: manual_prices
+        in: query
+        required: false
+        description: Filter to securities whose prices are loaded by hand (true) or
+          not (false).
+        schema:
+          type: boolean
       responses:
         '200':
           description: securities listed
@@ -8955,6 +8966,66 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+    patch:
+      summary: Turn manual prices on or off for a security
+      tags:
+      - Securities
+      description: manual_prices=true marks the security offline with reason "manual"
+        and clears its price provider, so the health check, the daily price import
+        and provider toggles leave it alone and prices are loaded with POST /api/v1/security_prices.
+        false clears the manual reason and leaves the security offline. Prices are
+        shared by every family on the instance, so this needs an admin and a security
+        the family holds or traded.
+      security:
+      - apiKeyAuth: []
+      parameters: []
+      responses:
+        '200':
+          description: security updated
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Security"
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '403':
+          description: insufficient scope or not an admin
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '404':
+          description: security not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '422':
+          description: invalid manual_prices value
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - security
+              properties:
+                security:
+                  type: object
+                  required:
+                  - manual_prices
+                  properties:
+                    manual_prices:
+                      type: boolean
+        required: true
   "/api/v1/security_prices":
     get:
       summary: List security price history referenced by family investment data
@@ -9030,6 +9101,160 @@ paths:
                 "$ref": "#/components/schemas/ErrorResponse"
         '422':
           description: invalid filter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    post:
+      summary: Upsert daily prices for a manually priced security
+      tags:
+      - Security Prices
+      description: Bulk upsert of up to 2000 daily prices, keyed on (security, date,
+        currency), so the same request can be sent again. The security must be set
+        to manual prices first (PATCH /api/v1/securities/{id}). Prices are rounded
+        to four decimal places and stored as settled. The whole request is rejected
+        if any row is invalid. Prices are shared by every family on the instance,
+        so this needs an admin and a security the family holds or traded.
+      security:
+      - apiKeyAuth: []
+      parameters: []
+      responses:
+        '200':
+          description: prices stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - created
+                - updated
+                - unchanged
+                properties:
+                  created:
+                    type: integer
+                  updated:
+                    type: integer
+                    description: Existing dates whose price changed
+                  unchanged:
+                    type: integer
+                    description: Existing dates already at that price
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '403':
+          description: insufficient scope or not an admin
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '404':
+          description: security not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '422':
+          description: invalid request or security is not set to manual prices
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - security_id
+              - prices
+              properties:
+                security_id:
+                  type: string
+                  format: uuid
+                currency:
+                  type: string
+                  description: ISO 4217 code, defaults to USD
+                prices:
+                  type: array
+                  minItems: 1
+                  maxItems: 2000
+                  items:
+                    type: object
+                    required:
+                    - date
+                    - price
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                        description: ISO 8601 date, not in the future, once per request
+                      price:
+                        type: string
+                        description: Positive decimal, rounded to four places
+        required: true
+    delete:
+      summary: Delete a date range of a manually priced security's prices
+      tags:
+      - Security Prices
+      description: Undoes a bad load. Both start_date and end_date are required, so
+        there is no delete-everything call. Only for securities set to manual prices;
+        needs an admin.
+      security:
+      - apiKeyAuth: []
+      parameters:
+      - name: security_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: start_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: end_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: currency
+        in: query
+        required: false
+        description: Only delete prices in this currency
+        schema:
+          type: string
+      responses:
+        '200':
+          description: prices deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - deleted
+                properties:
+                  deleted:
+                    type: integer
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '403':
+          description: insufficient scope or not an admin
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '422':
+          description: missing bound or security is not set to manual prices
           content:
             application/json:
               schema:
