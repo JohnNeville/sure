@@ -303,6 +303,34 @@ class Api::V1::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal account_names.sort, account_names
   end
 
+  test "closed accounts are left out unless asked for, and carry their closed date" do
+    closed_account = accounts(:depository)
+    closed_account.close_on!(Date.current)
+
+    get "/api/v1/accounts", params: {}, headers: api_headers(@api_key)
+    assert_response :success
+    assert_not_includes JSON.parse(response.body)["accounts"].map { |a| a["id"] }, closed_account.id
+
+    get "/api/v1/accounts", params: { include_closed: true }, headers: api_headers(@api_key)
+    assert_response :success
+    account = JSON.parse(response.body)["accounts"].find { |a| a["id"] == closed_account.id }
+    assert_not_nil account
+    assert_equal "closed", account["status"]
+    assert_equal Date.current.iso8601, account["closed_on"]
+  end
+
+  test "a closed account can be fetched with include_closed and is not found without it" do
+    closed_account = accounts(:depository)
+    closed_account.close_on!(Date.current)
+
+    get "/api/v1/accounts/#{closed_account.id}", headers: api_headers(@api_key)
+    assert_response :not_found
+
+    get "/api/v1/accounts/#{closed_account.id}", params: { include_closed: true }, headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal "closed", JSON.parse(response.body)["status"]
+  end
+
   private
 
     def api_headers(api_key)
