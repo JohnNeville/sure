@@ -235,4 +235,11 @@ class TransactionsHelperTest < ActionView::TestCase
   test "retail alone with nothing to show yields no details" do
     assert_nil build_transaction_extra_details(transaction_with({ "retail" => { "retailer" => " ", "items" => [] } }))
   end
+
+  test "raw_fallback: false leaves out the raw dump for extras no provider or client wrote" do
+    assert_nil build_transaction_extra_details(transaction_with({ "exchange_rate" => "1.2" }), raw_fallback: false)
+
+    details = build_transaction_extra_details(transaction_with({ "exchange_rate" => "1.2", "import" => { "source" => "Quicken" } }), raw_fallback: false)
+    assert_equal :import, details[:kind]
+  end
 end
