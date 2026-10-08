@@ -739,6 +739,9 @@ Rails.application.routes.draw do
       get :logo_options
       get :sparkline
       patch :toggle_active
+      get :confirm_close
+      patch :close
+      patch :reopen
       patch :toggle_exclude_from_reports
       patch :set_default
       patch :remove_default
