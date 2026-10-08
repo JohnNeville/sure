@@ -89,6 +89,13 @@
         <% end %>
       </div>
     <% end %>
+    <%# Only what an API client or sync provider stored for the trade -- a trade's extra also holds
+        internals such as the exchange rate, so unlike a transaction it has no raw fallback. %>
+    <% if (details = build_transaction_extra_details(trade, raw_fallback: false)) %>
+      <% dialog.with_section(title: t("transactions.show.additional_details"), open: false) do %>
+        <%= render "transactions/extra_details", details: details %>
+      <% end %>
+    <% end %>
     <% dialog.with_section(title: t(".settings")) do %>
       <div class="pb-4">
         <!-- Exclude Trade Form -->

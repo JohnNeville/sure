@@ -76,4 +76,12 @@ class Transaction::ClientExtraTest < ActiveSupport::TestCase
 
     assert request.valid?
   end
+
+  test "a record can accept a subset of the namespaces" do
+    request = Transaction::ClientExtra.new({ "retail" => { "retailer" => "Amazon" } }, namespaces: %w[import])
+
+    assert_not request.valid?
+    assert_match(/only accepts the "import" key \(got: retail\)/, request.errors.first)
+    assert Transaction::ClientExtra.new({ "import" => { "source" => "x" } }, namespaces: %w[import]).valid?
+  end
 end
