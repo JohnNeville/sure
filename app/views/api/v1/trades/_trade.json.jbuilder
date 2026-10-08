@@ -35,5 +35,8 @@ else
   json.category nil
 end
 
+# Provider and import details; "import" is the namespace API clients can write.
+json.extra trade.extra.presence || {}
+
 json.created_at trade.created_at.iso8601
 json.updated_at trade.updated_at.iso8601
