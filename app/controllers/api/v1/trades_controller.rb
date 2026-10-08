@@ -208,7 +208,7 @@ class Api::V1::TradesController < Api::V1::BaseController
     def trade_update_params
       params.require(:trade).permit(
         :name, :date, :amount, :currency, :notes, :nature, :type,
-        :qty, :price, :investment_activity_label, :category_id
+        :qty, :price, :fee, :investment_activity_label, :category_id
       )
     end
 
@@ -230,16 +230,22 @@ class Api::V1::TradesController < Api::V1::BaseController
 
       original_qty = flat[:qty]
       original_price = flat[:price]
+      original_fee = flat[:fee]
       type_or_nature = flat[:type].presence || flat[:nature]
 
-      if original_qty.present? || original_price.present?
+      # The entry's amount is qty * price plus the fee (see Trade::CreateForm), so it
+      # is recomputed whenever any of the three change, from the sent values and the
+      # trade's existing ones for the rest.
+      if original_qty.present? || original_price.present? || original_fee.present?
         qty = original_qty.present? ? original_qty : @trade.qty.abs
         price = original_price.present? ? original_price : @trade.price
+        fee = original_fee.present? ? original_fee.to_d : @trade.fee.to_d
         is_sell = type_or_nature.present? ? trade_sell_from_type_or_nature?(type_or_nature) : @trade.qty.negative?
         signed_qty = is_sell ? -qty.to_d.abs : qty.to_d.abs
         entry_params[:entryable_attributes][:qty] = signed_qty
         entry_params[:entryable_attributes][:price] = price.to_d
-        entry_params[:amount] = signed_qty * price.to_d
+        entry_params[:entryable_attributes][:fee] = fee
+        entry_params[:amount] = signed_qty * price.to_d + fee
         ticker = @trade.security&.ticker
         entry_params[:name] = Trade.build_name(is_sell ? "sell" : "buy", signed_qty.abs, ticker) if ticker.present?
         type_label = Trade::CreateForm::SECURITY_TRADE_LABELS[flat[:type].to_s.downcase]
