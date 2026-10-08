@@ -65,7 +65,7 @@ module TransactionsHelper
 
   # ---- Transaction extra details helpers ----
   # Returns a structured hash describing extra details for a transaction.
-  # Input can be a Transaction or an Entry (responds_to :transaction).
+  # Input can be a Transaction, a Trade or an Entry (its transaction is used).
   # Structure:
   #   {
   #     kind: :simplefin | :plaid | :raw,
@@ -77,13 +77,18 @@ module TransactionsHelper
   #     raw: String (pretty JSON) — only set for :raw, where we have no
   #       structured rendering for the provider
   #   }
-  def build_transaction_extra_details(obj)
-    tx = obj.respond_to?(:transaction) ? obj.transaction : obj
+  def build_transaction_extra_details(obj, raw_fallback: true)
+    # An Entry holds its Transaction. Anything else (a Transaction, a Trade) is used
+    # as is: every ActiveRecord model responds to #transaction, as the method that
+    # opens a database transaction, so respond_to? cannot tell them apart.
+    tx = obj.is_a?(Entry) ? obj.transaction : obj
     return nil unless tx.respond_to?(:extra) && tx.extra.present?
 
     extra = tx.extra
-    return transaction_extra_raw_details(extra) unless extra.is_a?(Hash) &&
-      (extra["simplefin"].present? || extra["plaid"].present? || extra["import"].present? || extra["retail"].present?)
+    unless extra.is_a?(Hash) &&
+        (extra["simplefin"].present? || extra["plaid"].present? || extra["import"].present? || extra["retail"].present?)
+      return raw_fallback ? transaction_extra_raw_details(extra) : nil
+    end
 
     details = if extra["simplefin"].present?
       simplefin_extra_details(extra["simplefin"])

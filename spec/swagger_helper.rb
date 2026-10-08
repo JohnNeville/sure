@@ -1620,6 +1620,11 @@ RSpec.configure do |config|
               qty: { type: :string },
               price: { type: :string },
               investment_activity_label: { type: :string, nullable: true },
+              extra: {
+                type: :object,
+                additionalProperties: true,
+                description: 'Provider and import details. Keys are provider-defined, plus import, the namespace API clients can write.'
+              },
               account: { '$ref' => '#/components/schemas/Account' },
               security: {
                 type: :object,

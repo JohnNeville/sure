@@ -3007,6 +3007,11 @@ components:
         investment_activity_label:
           type: string
           nullable: true
+        extra:
+          type: object
+          additionalProperties: true
+          description: Provider and import details. Keys are provider-defined, plus
+            import, the namespace API clients can write.
         account:
           "$ref": "#/components/schemas/Account"
         security:
@@ -9525,6 +9530,24 @@ paths:
                     investment_activity_label:
                       type: string
                       description: Activity label (e.g. Buy, Sell)
+                    extra:
+                      type: object
+                      description: 'Only the import key is accepted; it is deep-merged
+                        into the existing extra and never replaces other keys. Values
+                        are strings (numbers are stringified, at most 1000 characters),
+                        keys lowercase letters, digits and underscores, at most 30
+                        keys. A null or blank value removes that key and import: null
+                        removes the whole namespace. Suggested keys: original_description,
+                        posting_date, bank_transaction_id, reference, check_number,
+                        original_memo, original_category, source, source_account.
+                        Not supported when creating a transfer.'
+                      properties:
+                        import:
+                          type: object
+                          nullable: true
+                          additionalProperties:
+                            type: string
+                            nullable: true
                     category_id:
                       type: string
                       format: uuid
@@ -9647,6 +9670,24 @@ paths:
                     category_id:
                       type: string
                       format: uuid
+                    extra:
+                      type: object
+                      description: 'Only the import key is accepted; it is deep-merged
+                        into the existing extra and never replaces other keys. Values
+                        are strings (numbers are stringified, at most 1000 characters),
+                        keys lowercase letters, digits and underscores, at most 30
+                        keys. A null or blank value removes that key and import: null
+                        removes the whole namespace. Suggested keys: original_description,
+                        posting_date, bank_transaction_id, reference, check_number,
+                        original_memo, original_category, source, source_account.
+                        Not supported when creating a transfer.'
+                      properties:
+                        import:
+                          type: object
+                          nullable: true
+                          additionalProperties:
+                            type: string
+                            nullable: true
         required: true
     delete:
       summary: Delete trade
