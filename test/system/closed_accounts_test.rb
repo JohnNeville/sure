@@ -6,7 +6,7 @@ class ClosedAccountsTest < ApplicationSystemTestCase
   setup do
     sign_in @user = users(:family_admin)
     @account = @user.family.accounts.create!(
-      name: "Closed account system test", balance: 0, currency: "USD",
+      name: "Old savings system test", balance: 0, currency: "USD",
       accountable: Depository.new, owner: @user
     )
     visit accounts_url
@@ -22,18 +22,19 @@ class ClosedAccountsTest < ApplicationSystemTestCase
     click_button "Close account"
 
     assert_text "closed as of"
-    assert_text "1 closed account"
+    # The disclosure title is styled uppercase, which is what the browser reports.
+    assert_text(/1 closed account/i)
     assert @account.reload.closed?
 
-    find("summary", text: "1 closed account").click
+    find("summary", text: /1 closed account/i).click
     within "##{dom_id(@account)}" do
-      assert_text "Closed"
+      assert_text(/closed/i)
       find("button[aria-haspopup='menu']").click
       click_on "Reopen account"
     end
 
     assert_text "reopened"
-    assert_no_text "closed account"
+    assert_no_text(/closed account/i)
     assert @account.reload.active?
   end
 end
