@@ -76,6 +76,8 @@ en:
       search_security_placeholder: Search by ticker or name
       cancel: Cancel
       remap_security: Save
+      manual_prices: Manual prices
+      manual_prices_hint: This security has no market-data provider. Its prices were loaded by hand.
       provider_disabled_warning: "Price updates paused — %{provider} provider is disabled. Switch to another provider below or re-enable it in Settings."
       truncated_history_warning: "Price history is only available from %{date} onwards. Earlier dates have no data from the selected provider — this can happen when the asset was listed after your trade date, or when the provider only offers a limited historical window on its current plan."
       switch_provider_label: Switch provider

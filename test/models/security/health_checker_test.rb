@@ -155,4 +155,60 @@ class Security::HealthCheckerTest < ActiveSupport::TestCase
     assert_equal 0, @offline_never_checked_with_prices.failed_fetch_count
     assert_nil @offline_never_checked_with_prices.failed_fetch_at
   end
+
+  test "excluding_manual_prices keeps securities with no offline reason" do
+    manual = Security.create!(ticker: "MANUAL_SCOPE", offline: true, offline_reason: Security::OFFLINE_REASON_MANUAL)
+    failed = Security.create!(ticker: "FAILED_SCOPE", offline: true, offline_reason: "health_check_failed")
+
+    included = Security.excluding_manual_prices
+
+    assert_not_includes included, manual
+    assert_includes included, failed
+    assert_includes included, @new_security, "a security with a NULL reason must not be dropped by the != comparison"
+  end
+
+  test "check_all never selects manually priced securities, checked or not" do
+    never_checked = Security.create!(ticker: "MANUAL_NEW", offline: true, offline_reason: Security::OFFLINE_REASON_MANUAL, last_health_check_at: nil)
+    due = Security.create!(ticker: "MANUAL_DUE", offline: true, offline_reason: Security::OFFLINE_REASON_MANUAL,
+                           last_health_check_at: Security::HealthChecker::HEALTH_CHECK_INTERVAL.ago - 1.day)
+    Security.where.not(id: [ never_checked.id, due.id ]).delete_all
+
+    @provider.expects(:fetch_security_price).never
+
+    Security::HealthChecker.check_all
+
+    assert_nil never_checked.reload.last_health_check_at
+    assert_equal 0, never_checked.failed_fetch_count.to_i
+    assert due.reload.last_health_check_at < Security::HealthChecker::HEALTH_CHECK_INTERVAL.ago
+  end
+
+  test "run_check on a manually priced security does nothing" do
+    manual = Security.create!(ticker: "MANUAL_DIRECT", offline: true, offline_reason: Security::OFFLINE_REASON_MANUAL, failed_fetch_count: 2)
+    Security::Price.create!(security: manual, date: Date.current, price: 12.5, currency: "USD")
+
+    @provider.expects(:fetch_security_price).never
+
+    Security::HealthChecker::MAX_CONSECUTIVE_FAILURES.succ.times { Security::HealthChecker.new(manual).run_check }
+
+    manual.reload
+    assert manual.offline?
+    assert_equal Security::OFFLINE_REASON_MANUAL, manual.offline_reason
+    assert_equal 2, manual.failed_fetch_count
+    assert_nil manual.last_health_check_at
+    assert_equal 1, manual.prices.count
+  end
+
+  test "an already offline security keeps its stored prices when checks keep failing" do
+    Security::Price.create!(security: @offline_security, date: Date.current, price: 100, currency: "USD")
+
+    @provider.expects(:fetch_security_price)
+      .returns(provider_error_response(StandardError.new("No prices found")))
+      .times(Security::HealthChecker::MAX_CONSECUTIVE_FAILURES + 2)
+
+    hc = Security::HealthChecker.new(@offline_security)
+    (Security::HealthChecker::MAX_CONSECUTIVE_FAILURES + 2).times { hc.run_check }
+
+    assert @offline_security.reload.offline?
+    assert_equal 1, @offline_security.prices.count, "prices put on an offline security on purpose must survive"
+  end
 end

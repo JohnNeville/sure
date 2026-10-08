@@ -5,7 +5,9 @@
 # Each security goes through some basic health checks.  If failed, this class is responsible for:
 # - Marking failed attempts and incrementing the failed attempts counter
 # - Marking the security offline if enough consecutive failed checks occur
-# - When we move a security "offline", delete all prices for that security as we assume they are bad data
+# - When we move a security from online to "offline", delete all prices for that security as we assume they are bad data
+#
+# Securities whose prices are loaded by hand (Security#manual_prices?) are never checked.
 #
 # The health checker is run daily through SecurityHealthCheckJob (see config/schedule.yml), but not all
 # securities will be checked every day (we run in batches)
@@ -30,14 +32,14 @@ class Security::HealthChecker
     private
       # If a security has never had a health check, we prioritize it, regardless of batch size
       def never_checked_scope
-        Security.standard.where(last_health_check_at: nil)
+        Security.standard.excluding_manual_prices.where(last_health_check_at: nil)
       end
 
       # Any securities not checked for 30 days are due
       # We only process the batch size, which means some "due" securities will not be checked today
       # This is by design, to prevent all securities from coming due at the same time
       def due_for_check_scope
-        Security.standard.where(last_health_check_at: ..HEALTH_CHECK_INTERVAL.ago)
+        Security.standard.excluding_manual_prices.where(last_health_check_at: ..HEALTH_CHECK_INTERVAL.ago)
                          .order(last_health_check_at: :asc)
       end
   end
@@ -47,6 +49,10 @@ class Security::HealthChecker
   end
 
   def run_check
+    # Manually priced securities have no provider to check. Guarded here as well as
+    # in the scopes so a direct call cannot count a failure against one.
+    return if security.manual_prices?
+
     Rails.logger.info("Running health check for #{security.ticker}")
 
     if latest_provider_price
@@ -59,7 +65,7 @@ class Security::HealthChecker
       scope.set_tags(security_id: @security.id)
     end
   ensure
-    security.update!(last_health_check_at: Time.current)
+    security.update!(last_health_check_at: Time.current) unless security.manual_prices?
   end
 
   private
@@ -116,16 +122,22 @@ class Security::HealthChecker
       end
     end
 
-    # The "offline" state tells our MarketDataImporter (daily cron) to skip this security when fetching prices
+    # The "offline" state tells our MarketDataImporter (daily cron) to skip this security when fetching prices.
+    #
+    # Prices are cleared only on the move from online to offline, where we assume they
+    # are bad data. A security that was already offline never had provider prices to
+    # distrust: anything stored for it was put there on purpose.
     def convert_to_offline_security!
       Security.transaction do
+        was_online = !security.offline?
+
         security.update!(
           offline: true,
           offline_reason: "health_check_failed",
           failed_fetch_count: MAX_CONSECUTIVE_FAILURES + 1,
           failed_fetch_at: Time.current
         )
-        security.prices.delete_all
+        security.prices.delete_all if was_online
       end
     end
 end
