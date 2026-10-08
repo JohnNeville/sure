@@ -16,7 +16,8 @@ RSpec.describe 'API V1 Security Prices', type: :request do
     family.users.create!(
       email: 'api-user@example.com',
       password: 'password123',
-      password_confirmation: 'password123'
+      password_confirmation: 'password123',
+      role: 'admin'
     )
   end
 
@@ -138,6 +139,137 @@ RSpec.describe 'API V1 Security Prices', type: :request do
         schema '$ref' => '#/components/schemas/ErrorResponse'
 
         let(:security_id) { 'not-a-uuid' }
+
+        run_test!
+      end
+    end
+
+    post 'Upsert daily prices for a manually priced security' do
+      tags 'Security Prices'
+      description 'Bulk upsert of up to 2000 daily prices, keyed on (security, date, currency), so the same request can be ' \
+                  'sent again. The security must be set to manual prices first (PATCH /api/v1/securities/{id}). Prices are rounded ' \
+                  'to four decimal places and stored as settled. The whole request is rejected if any row is invalid. ' \
+                  'Prices are shared by every family on the instance, so this needs an admin and a security the family holds or traded.'
+      security [ { apiKeyAuth: [] } ]
+      consumes 'application/json'
+      produces 'application/json'
+
+      parameter name: :body, in: :body, required: true, schema: {
+        type: :object,
+        required: %w[security_id prices],
+        properties: {
+          security_id: { type: :string, format: :uuid },
+          currency: { type: :string, description: 'ISO 4217 code, defaults to USD' },
+          prices: {
+            type: :array,
+            minItems: 1,
+            maxItems: 2000,
+            items: {
+              type: :object,
+              required: %w[date price],
+              properties: {
+                date: { type: :string, format: :date, description: 'ISO 8601 date, not in the future, once per request' },
+                price: { type: :string, description: 'Positive decimal, rounded to four places' }
+              }
+            }
+          }
+        }
+      }
+
+      before { security.enable_manual_prices! }
+      let(:body) { { security_id: security.id, prices: [ { date: '2018-01-02', price: '21.5' }, { date: '2018-01-03', price: '21.62' } ] } }
+
+      response '200', 'prices stored' do
+        schema type: :object,
+               required: %w[created updated unchanged],
+               properties: {
+                 created: { type: :integer },
+                 updated: { type: :integer, description: 'Existing dates whose price changed' },
+                 unchanged: { type: :integer, description: 'Existing dates already at that price' }
+               }
+
+        run_test!
+      end
+
+      response '401', 'unauthorized' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { nil }
+
+        run_test!
+      end
+
+      response '403', 'insufficient scope or not an admin' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { api_key_without_read_scope.plain_key }
+
+        run_test!
+      end
+
+      response '404', 'security not found' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:body) { { security_id: SecureRandom.uuid, prices: [ { date: '2018-01-02', price: '1' } ] } }
+
+        run_test!
+      end
+
+      response '422', 'invalid request or security is not set to manual prices' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:body) { { security_id: security.id, prices: [] } }
+
+        run_test!
+      end
+    end
+
+    delete 'Delete a date range of a manually priced security\'s prices' do
+      tags 'Security Prices'
+      description 'Undoes a bad load. Both start_date and end_date are required, so there is no delete-everything call. ' \
+                  'Only for securities set to manual prices; needs an admin.'
+      security [ { apiKeyAuth: [] } ]
+      produces 'application/json'
+
+      parameter name: :security_id, in: :query, required: true, schema: { type: :string, format: :uuid }
+      parameter name: :start_date, in: :query, required: true, schema: { type: :string, format: :date }
+      parameter name: :end_date, in: :query, required: true, schema: { type: :string, format: :date }
+      parameter name: :currency, in: :query, required: false,
+                description: 'Only delete prices in this currency', schema: { type: :string }
+
+      before { security.enable_manual_prices! }
+      let(:security_id) { security.id }
+      let(:start_date) { '2018-01-01' }
+      let(:end_date) { '2018-12-31' }
+
+      response '200', 'prices deleted' do
+        schema type: :object,
+               required: %w[deleted],
+               properties: { deleted: { type: :integer } }
+
+        run_test!
+      end
+
+      response '401', 'unauthorized' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { nil }
+
+        run_test!
+      end
+
+      response '403', 'insufficient scope or not an admin' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { api_key_without_read_scope.plain_key }
+
+        run_test!
+      end
+
+      response '422', 'missing bound or security is not set to manual prices' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:end_date) { nil }
 
         run_test!
       end

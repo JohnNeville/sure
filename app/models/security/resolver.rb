@@ -50,6 +50,8 @@ class Security::Resolver
         exchange_operating_mic: exchange_operating_mic
       )
 
+      return security if security.persisted? && security.manual_prices?
+
       security.assign_attributes(
         country_code: country_code,
         offline: true # This tells us that we shouldn't try to fetch prices later
@@ -95,6 +97,10 @@ class Security::Resolver
       )
 
       return nil unless security
+
+      # A manually priced security stays exactly as set: no provider is attached
+      # to it and nothing brings it online, whoever asks for it by ticker.
+      return security if security.manual_prices?
 
       # A "resolution_pending" record means the last provider search failed
       # technically (rate limit/timeout), not that the security is a
@@ -174,6 +180,8 @@ class Security::Resolver
         ticker: match.ticker,
         exchange_operating_mic: match.exchange_operating_mic
       )
+
+      return security if security.persisted? && security.manual_prices?
 
       security.country_code = match.country_code
 

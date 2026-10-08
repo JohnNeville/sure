@@ -188,9 +188,162 @@ class Api::V1::SecurityPricesControllerTest < ActionDispatch::IntegrationTest
     api_key_without_read&.destroy
   end
 
+  # --- manual prices: bulk upsert and range delete ---
+
+  test "create upserts daily prices for a manually priced security, and again is a no-op" do
+    @security.enable_manual_prices!
+    body = { security_id: @security.id, prices: [
+      { date: "2018-01-02", price: "21.5000" }, { date: "2018-01-03", price: 21.62 }
+    ] }
+
+    post api_v1_security_prices_url, params: body, headers: api_headers(write_key_for(@user)), as: :json
+
+    assert_response :success
+    assert_equal({ "created" => 2, "updated" => 0, "unchanged" => 0 }, JSON.parse(response.body))
+    stored = @security.prices.where(currency: "USD", date: [ "2018-01-02", "2018-01-03" ]).order(:date)
+    assert_equal [ BigDecimal("21.5"), BigDecimal("21.62") ], stored.map(&:price)
+    assert stored.none?(&:provisional)
+
+    post api_v1_security_prices_url, params: body, headers: api_headers(write_key_for(@user)), as: :json
+    assert_equal({ "created" => 0, "updated" => 0, "unchanged" => 2 }, JSON.parse(response.body))
+  end
+
+  test "create updates changed dates, keeps other currencies apart and rounds to four places" do
+    @security.enable_manual_prices!
+    Security::Price.create!(security: @security, date: "2018-02-01", price: 10, currency: "USD")
+
+    post api_v1_security_prices_url,
+         params: { security_id: @security.id, currency: "eur", prices: [ { date: "2018-02-01", price: "12.34567" }, { date: "2018-02-02", price: 5 } ] },
+         headers: api_headers(write_key_for(@user)), as: :json
+    assert_response :success
+    assert_equal({ "created" => 2, "updated" => 0, "unchanged" => 0 }, JSON.parse(response.body), "EUR rows are separate from the USD one")
+    assert_equal BigDecimal("12.3457"), @security.prices.find_by!(date: "2018-02-01", currency: "EUR").price
+    assert_equal BigDecimal("10"), @security.prices.find_by!(date: "2018-02-01", currency: "USD").price
+
+    post api_v1_security_prices_url,
+         params: { security_id: @security.id, prices: [ { date: "2018-02-01", price: 11 } ] },
+         headers: api_headers(write_key_for(@user)), as: :json
+    assert_equal({ "created" => 0, "updated" => 1, "unchanged" => 0 }, JSON.parse(response.body))
+    assert_equal BigDecimal("11"), @security.prices.find_by!(date: "2018-02-01", currency: "USD").price
+  end
+
+  test "create refuses a security that is not manually priced, with the way to fix it" do
+    assert_no_difference("Security::Price.count") do
+      post api_v1_security_prices_url,
+           params: { security_id: @security.id, prices: [ { date: "2018-01-02", price: 1 } ] },
+           headers: api_headers(write_key_for(@user)), as: :json
+    end
+
+    assert_response :unprocessable_entity
+    assert_match(/not set to manual prices/, JSON.parse(response.body)["message"])
+  end
+
+  test "create validates the request and changes nothing when any row is bad" do
+    @security.enable_manual_prices!
+    good = { date: "2018-01-02", price: 1 }
+    [
+      { prices: [] },
+      { prices: "nope" },
+      { prices: [ good, { date: "not a date", price: 1 } ] },
+      { prices: [ good, { date: 2.days.from_now.to_date.iso8601, price: 1 } ] },
+      { prices: [ good, { date: "2018-01-03", price: "abc" } ] },
+      { prices: [ good, { date: "2018-01-03", price: 0 } ] },
+      { prices: [ good, { date: "2018-01-03", price: -4 } ] },
+      { prices: [ good, { date: "2018-01-03", price: 0.00001 } ] },
+      { prices: [ good, good ] },
+      { prices: [ good, "nope" ] },
+      { currency: "ZZZ", prices: [ good ] },
+      { prices: Array.new(Api::V1::SecurityPricesController::MAX_PRICES_PER_REQUEST + 1) { |i| { date: (Date.new(2000, 1, 1) + i).iso8601, price: 1 } } }
+    ].each do |bad|
+      assert_no_difference("Security::Price.count") do
+        post api_v1_security_prices_url,
+             params: { security_id: @security.id }.merge(bad),
+             headers: api_headers(write_key_for(@user)), as: :json
+      end
+      assert_response :unprocessable_entity, "expected #{bad.to_json[0, 90]} to be rejected"
+    end
+  end
+
+  test "create accepts exactly the row cap" do
+    @security.enable_manual_prices!
+    rows = Array.new(Api::V1::SecurityPricesController::MAX_PRICES_PER_REQUEST) { |i| { date: (Date.new(2000, 1, 1) + i).iso8601, price: 1 } }
+
+    post api_v1_security_prices_url, params: { security_id: @security.id, prices: rows },
+         headers: api_headers(write_key_for(@user)), as: :json
+
+    assert_response :success
+    assert_equal Api::V1::SecurityPricesController::MAX_PRICES_PER_REQUEST, JSON.parse(response.body)["created"]
+  end
+
+  test "writes need write scope, an admin, and a security the family holds" do
+    @security.enable_manual_prices!
+    @other_security.enable_manual_prices!
+    body = { security_id: @security.id, prices: [ { date: "2018-01-02", price: 1 } ] }
+
+    post api_v1_security_prices_url, params: body, headers: api_headers(@api_key), as: :json
+    assert_response :forbidden
+
+    post api_v1_security_prices_url, params: body, headers: api_headers(write_key_for(users(:family_member))), as: :json
+    assert_response :forbidden
+
+    post api_v1_security_prices_url, params: { security_id: @other_security.id, prices: [ { date: "2018-01-02", price: 1 } ] },
+         headers: api_headers(write_key_for(@user)), as: :json
+    assert_response :not_found
+
+    post api_v1_security_prices_url, params: { security_id: "not-a-uuid", prices: [] },
+         headers: api_headers(write_key_for(@user)), as: :json
+    assert_response :unprocessable_entity
+
+    post api_v1_security_prices_url, params: body, as: :json
+    assert_response :unauthorized
+  end
+
+  test "destroy_range deletes a date range of a manual security so a bad load can be undone" do
+    @security.enable_manual_prices!
+    %w[2018-03-01 2018-03-02 2018-03-03 2018-03-10].each { |d| Security::Price.create!(security: @security, date: d, price: 1, currency: "USD") }
+    Security::Price.create!(security: @security, date: "2018-03-02", price: 2, currency: "EUR")
+
+    delete api_v1_security_prices_url,
+           params: { security_id: @security.id, start_date: "2018-03-02", end_date: "2018-03-03", currency: "USD" },
+           headers: api_headers(write_key_for(@user))
+
+    assert_response :success
+    assert_equal({ "deleted" => 2 }, JSON.parse(response.body))
+    assert_equal %w[2018-03-01 2018-03-10], @security.prices.where(currency: "USD", date: "2018-03-01".."2018-03-31").order(:date).map { |p| p.date.iso8601 }
+    assert @security.prices.exists?(date: "2018-03-02", currency: "EUR"), "other currencies are untouched without a match"
+  end
+
+  test "destroy_range needs both bounds, valid dates, a manual security and an admin" do
+    price = Security::Price.create!(security: @security, date: "2018-03-01", price: 1, currency: "USD")
+
+    delete api_v1_security_prices_url, params: { security_id: @security.id, start_date: "2018-03-01", end_date: "2018-03-01" },
+           headers: api_headers(write_key_for(@user))
+    assert_response :unprocessable_entity, "not manual"
+
+    @security.enable_manual_prices!
+    delete api_v1_security_prices_url, params: { security_id: @security.id, start_date: "2018-03-01" },
+           headers: api_headers(write_key_for(@user))
+    assert_response :unprocessable_entity, "no end date, so no delete-everything call"
+
+    delete api_v1_security_prices_url, params: { security_id: @security.id, start_date: "bad", end_date: "2018-03-01" },
+           headers: api_headers(write_key_for(@user))
+    assert_response :unprocessable_entity
+
+    delete api_v1_security_prices_url, params: { security_id: @security.id, start_date: "2018-03-01", end_date: "2018-03-01" },
+           headers: api_headers(write_key_for(users(:family_member)))
+    assert_response :forbidden
+
+    assert Security::Price.exists?(price.id)
+  end
+
   private
 
     def api_headers(api_key)
       { "X-Api-Key" => api_key.plain_key }
+    end
+
+    def write_key_for(user, name: "Write Key")
+      user.api_keys.active.where.not(id: @api_key.id).destroy_all
+      ApiKey.create!(user: user, name: name, scopes: [ "read_write" ], source: "mobile", display_key: "test_rw_#{SecureRandom.hex(8)}")
     end
 end

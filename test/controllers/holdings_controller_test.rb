@@ -18,6 +18,22 @@ class HoldingsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "the drawer says when a security's prices are loaded by hand" do
+    @holding.security.enable_manual_prices!
+
+    get holding_path(@holding)
+
+    assert_response :success
+    assert_select "span", text: "Manual prices"
+  end
+
+  test "the drawer has no manual prices badge for a provider-priced security" do
+    get holding_path(@holding)
+
+    assert_response :success
+    assert_select "span", text: "Manual prices", count: 0
+  end
+
   test "shows exact share count without rounding" do
     @holding.update!(qty: 10.374)
 
