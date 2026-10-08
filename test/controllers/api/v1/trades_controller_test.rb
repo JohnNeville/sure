@@ -1059,16 +1059,73 @@ class Api::V1::TradesControllerTest < ActionDispatch::IntegrationTest
     assert_equal 100, Trade.find(trade_id).price
   end
 
+  # Creating a trade stores amount = qty * price + fee, so an update has to keep
+  # the fee in the amount instead of silently dropping it.
+  test "updating qty keeps the existing fee in the amount" do
+    trade_id = create_buy_trade(qty: 4, price: 100, fee: 5)
+    assert_equal 405, Trade.find(trade_id).entry.amount
+
+    patch api_v1_trade_url(trade_id), params: { trade: { qty: 32 } }, headers: api_headers(read_write_api_key)
+
+    assert_response :success
+    trade = Trade.find(trade_id)
+    assert_equal 5, trade.fee
+    assert_equal 3205, trade.entry.amount
+  end
+
+  test "updating a sell keeps the fee, which reduces the proceeds" do
+    trade_id = create_buy_trade(qty: 5, price: 100, fee: 5, type: "sell")
+    assert_equal(-495, Trade.find(trade_id).entry.amount)
+
+    patch api_v1_trade_url(trade_id), params: { trade: { qty: 8, price: 110 } }, headers: api_headers(read_write_api_key)
+
+    assert_response :success
+    assert_equal(-875, Trade.find(trade_id).entry.amount)
+  end
+
+  test "sending a fee stores it and rewrites the amount" do
+    trade_id = create_buy_trade(qty: 5, price: 100)
+
+    patch api_v1_trade_url(trade_id), params: { trade: { fee: 7.5 } }, headers: api_headers(read_write_api_key)
+
+    assert_response :success
+    trade = Trade.find(trade_id)
+    assert_equal 7.5, trade.fee
+    assert_equal 5, trade.qty
+    assert_equal 100, trade.price
+    assert_equal 507.5, trade.entry.amount
+  end
+
+  test "a fee of zero clears the fee" do
+    trade_id = create_buy_trade(qty: 5, price: 100, fee: 5)
+
+    patch api_v1_trade_url(trade_id), params: { trade: { fee: 0 } }, headers: api_headers(read_write_api_key)
+
+    assert_response :success
+    trade = Trade.find(trade_id)
+    assert_equal 0, trade.fee
+    assert_equal 500, trade.entry.amount
+  end
+
+  test "a trade without a fee updates exactly as before" do
+    trade_id = create_buy_trade(qty: 5, price: 100)
+
+    patch api_v1_trade_url(trade_id), params: { trade: { qty: 6 } }, headers: api_headers(read_write_api_key)
+
+    assert_response :success
+    assert_equal 600, Trade.find(trade_id).entry.amount
+  end
+
   private
 
-    def create_buy_trade(qty:, price:, type: "buy")
+    def create_buy_trade(qty:, price:, type: "buy", fee: nil)
       security = Security.create!(ticker: "PX#{SecureRandom.hex(3).upcase}", name: "Price Security", country_code: "US")
 
       post "/api/v1/trades",
         params: { trade: {
           account_id: @investment_account.id, type: type, date: Date.current,
-          qty: qty, price: price, currency: "USD", security_id: security.id
-        } },
+          qty: qty, price: price, currency: "USD", security_id: security.id, fee: fee
+        }.compact },
         headers: api_headers(read_write_api_key)
 
       assert_response :created
