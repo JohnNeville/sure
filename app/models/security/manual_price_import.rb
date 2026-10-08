@@ -59,6 +59,8 @@ class Security::ManualPriceImport
     # "resolution_pending"). The importer keeps non-provisional rows, so closes
     # written there would outlast the provider's own once it came back.
     def untracked?
+      return true if security.manual_prices?
+
       security.offline? && security.offline_reason.blank? && security.price_provider.blank?
     end
 

@@ -16,7 +16,8 @@ RSpec.describe 'API V1 Security Prices', type: :request do
     family.users.create!(
       email: 'api-user@example.com',
       password: 'password123',
-      password_confirmation: 'password123'
+      password_confirmation: 'password123',
+      role: 'admin'
     )
   end
 
@@ -201,6 +202,57 @@ RSpec.describe 'API V1 Security Prices', type: :request do
         schema '$ref' => '#/components/schemas/SecurityPriceImportError'
 
         let(:body) { { security_id: offline_security.id, prices: [ { date: Date.current.iso8601, price: '-1', currency: 'USD' } ] } }
+
+        run_test!
+      end
+    end
+
+    delete 'Delete a date range of a manually priced security\'s prices' do
+      tags 'Security Prices'
+      description 'Undoes a bad load. Both start_date and end_date are required, so there is no delete-everything call. ' \
+                  'Only for securities set to manual prices; needs an admin.'
+      security [ { apiKeyAuth: [] } ]
+      produces 'application/json'
+
+      parameter name: :security_id, in: :query, required: true, schema: { type: :string, format: :uuid }
+      parameter name: :start_date, in: :query, required: true, schema: { type: :string, format: :date }
+      parameter name: :end_date, in: :query, required: true, schema: { type: :string, format: :date }
+      parameter name: :currency, in: :query, required: false,
+                description: 'Only delete prices in this currency', schema: { type: :string }
+
+      before { security.enable_manual_prices! }
+      let(:security_id) { security.id }
+      let(:start_date) { '2018-01-01' }
+      let(:end_date) { '2018-12-31' }
+
+      response '200', 'prices deleted' do
+        schema type: :object,
+               required: %w[deleted],
+               properties: { deleted: { type: :integer } }
+
+        run_test!
+      end
+
+      response '401', 'unauthorized' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { nil }
+
+        run_test!
+      end
+
+      response '403', 'insufficient scope or not an admin' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { api_key_without_read_scope.plain_key }
+
+        run_test!
+      end
+
+      response '422', 'missing bound or security is not set to manual prices' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:end_date) { nil }
 
         run_test!
       end
