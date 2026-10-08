@@ -11,6 +11,10 @@
 #
 # Both render in the "Additional details" section next to provider data.
 #
+# Records without a retail order, such as trades, take only `import`:
+#
+#   Transaction::ClientExtra.new(extra, namespaces: %w[import])
+#
 #   request = Transaction::ClientExtra.new({ "import" => { "source" => "Quicken" } })
 #   request.valid?                 # => true
 #   request.apply_to(tx.extra)     # => tx.extra with import deep-merged, nothing else touched
@@ -42,8 +46,10 @@ class Transaction::ClientExtra
   attr_reader :errors
 
   # @param extra [ActionController::Parameters, Hash, nil] the request's `extra` value
-  def initialize(extra)
+  # @param namespaces [Array<String>] the namespaces this record accepts
+  def initialize(extra, namespaces: NAMESPACES)
     @errors = []
+    @namespaces = namespaces
     @changes = parse(extra)
   end
 
@@ -86,10 +92,10 @@ class Transaction::ClientExtra
       end
 
       extra = extra.stringify_keys
-      unknown = extra.keys - NAMESPACES
-      errors << "extra only accepts the #{NAMESPACES.map { |n| "\"#{n}\"" }.to_sentence} keys (got: #{unknown.join(", ")})" if unknown.any?
+      unknown = extra.keys - @namespaces
+      errors << "extra only accepts the #{@namespaces.map { |n| "\"#{n}\"" }.to_sentence} #{"key".pluralize(@namespaces.size)} (got: #{unknown.join(", ")})" if unknown.any?
 
-      extra.slice(*NAMESPACES).each_with_object({}) do |(namespace, requested), changes|
+      extra.slice(*@namespaces).each_with_object({}) do |(namespace, requested), changes|
         parsed = parse_namespace(namespace, requested)
         changes[namespace] = parsed unless parsed.nil?
       end
