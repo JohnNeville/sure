@@ -2,7 +2,7 @@ class AccountsController < ApplicationController
   include StreamExtensions
 
   before_action :set_account, only: %i[show sparkline sync set_default remove_default]
-  before_action :set_manageable_account, only: %i[toggle_active toggle_exclude_from_reports destroy unlink confirm_unlink select_provider]
+  before_action :set_manageable_account, only: %i[toggle_active confirm_close close reopen toggle_exclude_from_reports destroy unlink confirm_unlink select_provider]
   before_action :ensure_linked_account, only: %i[confirm_unlink unlink]
   include Periodable
 
@@ -10,14 +10,21 @@ class AccountsController < ApplicationController
     @accessible_account_ids = Current.user.accessible_accounts.pluck(:id)
     @manual_accounts = family.accounts
           .listable_manual
+          .where.not(status: "closed")
           .where(id: @accessible_account_ids)
           .with_attached_logo
           .includes(:accountable, :account_providers, :plaid_account, :simplefin_account)
           .order(:name)
     @financekit_accounts = Current.family.accounts
-      .where(id: @accessible_account_ids).where.not(status: :pending_deletion)
+      .where(id: @accessible_account_ids).where.not(status: [ :pending_deletion, :closed ])
       .joins(:account_providers).where(account_providers: { provider_type: "FinancekitAccountLineage" })
       .distinct.with_attached_logo.includes(:accountable, account_providers: :provider).order(:name)
+    # Closed accounts, manual or linked, are listed apart so they stay out of the way.
+    @closed_accounts = family.accounts
+          .where(status: "closed", id: @accessible_account_ids)
+          .with_attached_logo
+          .includes(:accountable, :account_providers, :plaid_account, :simplefin_account)
+          .order(:name)
     @plaid_items = visible_provider_items(family.plaid_items.ordered.with_attached_logo.includes(:plaid_accounts))
     @simplefin_items = visible_provider_items(family.simplefin_items.ordered.with_attached_logo)
     @lunchflow_items = visible_provider_items(family.lunchflow_items.ordered.with_attached_logo.includes(:lunchflow_accounts))
@@ -213,6 +220,35 @@ class AccountsController < ApplicationController
       @account.enable!
     end
     redirect_to accounts_path
+  end
+
+  def confirm_close
+    @closed_on = Date.current
+  end
+
+  # Closes the account as of a date: its history stays, nothing newer may be added
+  # and it stops syncing.
+  def close
+    closed_on = Date.iso8601(params[:closed_on].to_s)
+    if closed_on > Date.current
+      return redirect_to accounts_path, alert: t("accounts.close.future_date")
+    end
+
+    @account.close_on!(closed_on)
+    redirect_to accounts_path, notice: t("accounts.close.success", name: @account.name, date: l(closed_on, format: :long))
+  rescue Date::Error
+    redirect_to accounts_path, alert: t("accounts.close.invalid_date")
+  rescue ActiveRecord::RecordInvalid => e
+    redirect_to accounts_path, alert: e.record.errors.full_messages.to_sentence
+  rescue AASM::InvalidTransition
+    redirect_to accounts_path, alert: t("accounts.close.cannot_close")
+  end
+
+  def reopen
+    @account.reopen_account!
+    redirect_to accounts_path, notice: t("accounts.reopen.success", name: @account.name)
+  rescue AASM::InvalidTransition
+    redirect_to accounts_path, alert: t("accounts.reopen.cannot_reopen")
   end
 
   # Toggles the exclude_from_reports flag on the account and redirects to the

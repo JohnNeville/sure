@@ -83,4 +83,35 @@ class EntryTest < ActiveSupport::TestCase
     assert_not entry.reset_exclusion!
     assert entry.reload.excluded?
   end
+
+  test "a closed account takes nothing dated after its closed date" do
+    account = families(:dylan_family).accounts.create!(name: "Closed", balance: 0, currency: "USD", accountable: Depository.new)
+    closed_on = 10.days.ago.to_date
+    account.close_on!(closed_on)
+
+    after = account.entries.build(date: closed_on + 1.day, name: "Late", amount: 5, currency: "USD", entryable: Transaction.new)
+    assert_not after.valid?
+    assert_match(/after this account was closed on/, after.errors[:date].to_sentence)
+
+    on_the_day = account.entries.build(date: closed_on, name: "Last", amount: 5, currency: "USD", entryable: Transaction.new)
+    assert on_the_day.valid?
+  end
+
+  test "an entry already after a closed date stays editable until its date moves" do
+    account = families(:dylan_family).accounts.create!(name: "Closed later", balance: 0, currency: "USD", accountable: Depository.new)
+    entry = create_transaction(account: account, date: Date.current, amount: 5)
+    account.update_columns(status: "closed", closed_on: 10.days.ago.to_date)
+
+    entry.reload.name = "Renamed"
+    assert entry.valid?
+
+    entry.date = Date.current - 1.day
+    assert_not entry.valid?
+  end
+
+  test "an account that is not closed has no date limit" do
+    entry = create_transaction(account: accounts(:depository), date: Date.current, amount: 5)
+
+    assert entry.valid?
+  end
 end

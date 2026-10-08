@@ -668,6 +668,9 @@ Rails.application.routes.draw do
       post :sync
       get :sparkline
       patch :toggle_active
+      get :confirm_close
+      patch :close
+      patch :reopen
       patch :toggle_exclude_from_reports
       patch :set_default
       patch :remove_default

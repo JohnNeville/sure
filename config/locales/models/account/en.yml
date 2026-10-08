@@ -17,11 +17,21 @@ en:
     attributes:
       account:
         balance: Balance
+        closed_on: Closed date
         currency: Currency
         family: "%{moniker}"
         family_id: "%{moniker}"
         name: Name
         subtype: Subtype
+    errors:
+      models:
+        account:
+          attributes:
+            closed_on:
+              blank: is required to close an account
+              entries_after:
+                one: has 1 entry after it. Move or delete it first
+                other: has %{count} entries after it. Move or delete them first
     models:
       account: Account
       account/credit: Credit Card

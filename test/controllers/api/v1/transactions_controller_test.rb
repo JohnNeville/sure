@@ -1311,6 +1311,57 @@ end
     end
   end
 
+  # Closed accounts: readable, but nothing may be dated after the closed date
+
+  test "creating a transaction after the account's closed date is rejected, on the date is fine" do
+    account = @family.accounts.create!(name: "Closed account", balance: 0, currency: "USD", accountable: Depository.new, owner: @user)
+    closed_on = 5.days.ago.to_date
+    account.close_on!(closed_on)
+
+    assert_no_difference("Entry.count") do
+      post api_v1_transactions_url,
+           params: { transaction: { account_id: account.id, name: "Too late", amount: 10, date: closed_on + 1.day, nature: "expense" } },
+           headers: api_headers(@api_key), as: :json
+    end
+    assert_response :unprocessable_entity
+    assert_match(/after this account was closed on/, JSON.parse(response.body)["errors"].to_sentence)
+
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: account.id, name: "Last day", amount: 10, date: closed_on, nature: "expense" } },
+         headers: api_headers(@api_key), as: :json
+    assert_response :created
+  end
+
+  test "moving a transaction past its account's closed date is rejected, other edits are fine" do
+    account = @family.accounts.create!(name: "Closed account", balance: 0, currency: "USD", accountable: Depository.new, owner: @user)
+    closed_on = 5.days.ago.to_date
+    entry = account.entries.create!(date: closed_on - 1.day, name: "Old", amount: 5, currency: "USD", entryable: Transaction.new)
+    account.close_on!(closed_on)
+
+    patch api_v1_transaction_url(entry.transaction),
+          params: { transaction: { date: closed_on + 2.days } },
+          headers: api_headers(@api_key), as: :json
+    assert_response :unprocessable_entity
+    assert_equal closed_on - 1.day, entry.reload.date
+
+    patch api_v1_transaction_url(entry.transaction),
+          params: { transaction: { notes: "Still editable" } },
+          headers: api_headers(@api_key), as: :json
+    assert_response :success
+    assert_equal "Still editable", entry.reload.notes
+  end
+
+  test "a closed account's transactions are still returned" do
+    account = @family.accounts.create!(name: "Closed account", balance: 0, currency: "USD", accountable: Depository.new, owner: @user)
+    entry = account.entries.create!(date: 10.days.ago.to_date, name: "Kept history", amount: 5, currency: "USD", entryable: Transaction.new)
+    account.close_on!(5.days.ago.to_date)
+
+    get api_v1_transactions_url, params: { account_id: account.id }, headers: api_headers(@api_key)
+
+    assert_response :success
+    assert_equal [ entry.transaction.id ], JSON.parse(response.body)["transactions"].map { |t| t["id"] }
+  end
+
   private
 
     def api_headers(api_key)

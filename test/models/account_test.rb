@@ -944,4 +944,76 @@ class AccountTest < ActiveSupport::TestCase
     accounts(:credit_card).account_shares.find_by!(user: member).update!(permission: "read_write")
     assert_includes Account.annotatable_by(member).pluck(:id), accounts(:credit_card).id, "read_write share"
   end
+  test "closing an account keeps it out of live lists but in reportable and historical ones" do
+    account = @family.accounts.create!(name: "Old checking", balance: 0, currency: "USD", accountable: Depository.new)
+
+    account.close_on!(Date.current)
+
+    assert account.reload.closed?
+    assert_equal Date.current, account.closed_on
+    assert_not_includes Account.visible, account
+    assert_includes Account.reportable, account
+    assert_includes Account.historical, account
+  end
+
+  test "closing needs a date and refuses an account that has entries after it" do
+    account = @family.accounts.create!(name: "Old card", balance: 0, currency: "USD", accountable: CreditCard.new)
+    create_transaction(account: account, date: Date.current, amount: 10)
+    create_transaction(account: account, date: 3.days.ago.to_date, amount: 10)
+
+    error = assert_raises(ActiveRecord::RecordInvalid) { account.close_on!(2.days.ago.to_date) }
+
+    assert_match(/has 1 entry after it/, error.message)
+    assert account.reload.active?
+    assert_nil account.closed_on
+
+    account.close_on!(Date.current)
+    assert account.reload.closed?
+  end
+
+  test "closing is refused from pending deletion" do
+    account = @family.accounts.create!(name: "Doomed", balance: 0, currency: "USD", accountable: Depository.new)
+    account.mark_for_deletion!
+
+    assert_raises(AASM::InvalidTransition) { account.close_on!(Date.current) }
+    assert account.reload.pending_deletion?
+  end
+
+  test "a disabled account can be closed, and a closed one reopened" do
+    account = @family.accounts.create!(name: "Hidden", balance: 0, currency: "USD", accountable: Depository.new)
+    account.disable!
+
+    account.close_on!(Date.current)
+    assert account.reload.closed?
+
+    account.reopen_account!
+    assert account.reload.active?
+    assert_nil account.closed_on
+    assert_raises(AASM::InvalidTransition) { account.reopen_account! }
+  end
+
+  test "active_until is the closed date for a closed account, the day before for a disabled one" do
+    account = @family.accounts.create!(name: "Window", balance: 0, currency: "USD", accountable: Depository.new)
+    assert_nil account.active_until
+
+    account.disable!
+    assert_equal Date.current - 1.day, account.reload.active_until
+
+    account.close_on!(5.days.ago.to_date)
+    assert_equal 5.days.ago.to_date, account.reload.active_until
+  end
+
+  test "a closed account does not start a sync" do
+    account = @family.accounts.create!(name: "Quiet", balance: 0, currency: "USD", accountable: Depository.new)
+    account.close_on!(Date.current)
+
+    assert_no_difference "Sync.count" do
+      assert_nil account.sync_later
+    end
+
+    account.reopen_account!
+    assert_difference "Sync.count", 1 do
+      account.sync_later
+    end
+  end
 end

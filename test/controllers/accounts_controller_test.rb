@@ -759,6 +759,89 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to account_url(accounts(:credit_card))
   end
 
+  test "confirm_close asks for the last day the account was open" do
+    get confirm_close_account_url(@account)
+
+    assert_response :success
+    assert_select "input[type=date][name=closed_on][max='#{Date.current}']"
+    assert_select "form[action='#{close_account_path(@account)}']"
+  end
+
+  test "close ends the account on the chosen date and keeps it" do
+    account = @user.family.accounts.create!(name: "Old savings", balance: 0, currency: "USD", accountable: Depository.new, owner: @user)
+    date = 3.days.ago.to_date
+
+    patch close_account_url(account), params: { closed_on: date.iso8601 }
+
+    assert_redirected_to accounts_path
+    assert_match "closed as of", flash[:notice]
+    account.reload
+    assert account.closed?
+    assert_equal date, account.closed_on
+  end
+
+  test "close refuses a future date, a bad date, and a date before existing entries" do
+    patch close_account_url(@account), params: { closed_on: 2.days.from_now.to_date.iso8601 }
+    assert_redirected_to accounts_path
+    assert_equal I18n.t("accounts.close.future_date"), flash[:alert]
+
+    patch close_account_url(@account), params: { closed_on: "not a date" }
+    assert_equal I18n.t("accounts.close.invalid_date"), flash[:alert]
+
+    create_transaction(account: @account, date: Date.current, amount: 5)
+    patch close_account_url(@account), params: { closed_on: 5.days.ago.to_date.iso8601 }
+    assert_match(/entr(y|ies) after it/, flash[:alert])
+
+    assert @account.reload.active?
+  end
+
+  test "close and reopen require write permission" do
+    sign_in users(:family_member)
+
+    patch close_account_url(accounts(:credit_card)), params: { closed_on: Date.current.iso8601 }
+    assert_redirected_to account_url(accounts(:credit_card))
+    assert accounts(:credit_card).reload.active?
+  end
+
+  test "reopen brings a closed account back" do
+    @account.close_on!(Date.current)
+
+    patch reopen_account_url(@account)
+
+    assert_redirected_to accounts_path
+    @account.reload
+    assert @account.active?
+    assert_nil @account.closed_on
+  end
+
+  test "reopen refuses an account that is not closed" do
+    patch reopen_account_url(@account)
+
+    assert_redirected_to accounts_path
+    assert_equal I18n.t("accounts.reopen.cannot_reopen"), flash[:alert]
+  end
+
+  test "index lists a closed account only in the collapsed closed section" do
+    closed = accounts(:credit_card)
+    closed.close_on!(Date.current)
+
+    get accounts_url
+
+    assert_response :success
+    assert_select "#manual-accounts", text: /#{Regexp.escape(closed.name)}/, count: 0
+    assert_select "details", text: /1 closed account/ do
+      assert_select "a", text: closed.name
+      assert_select "span", text: /Closed /
+    end
+  end
+
+  test "index offers no closed section when nothing is closed" do
+    get accounts_url
+
+    assert_response :success
+    assert_no_match(/closed account/, response.body)
+  end
+
   test "select_provider shows available providers" do
     get select_provider_account_url(@account)
     assert_response :success

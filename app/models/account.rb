@@ -10,6 +10,8 @@ class Account < ApplicationRecord
 
   validates :name, :balance, :currency, presence: true
   validate :owner_belongs_to_family, if: -> { owner_id.present? && family_id.present? }
+  validates :closed_on, presence: true, if: :closed?
+  validate :no_entries_after_closed_on, if: -> { closed? && closed_on.present? && (will_save_change_to_closed_on? || will_save_change_to_status?) }
 
   belongs_to :family
   belongs_to :owner, class_name: "User", optional: true
@@ -42,9 +44,14 @@ class Account < ApplicationRecord
   enum :classification, { asset: "asset", liability: "liability" }, validate: { allow_nil: true }
 
   VISIBLE_STATUSES = %w[draft active].freeze
-  HISTORICAL_STATUSES = (VISIBLE_STATUSES + %w[disabled]).freeze
+  # Accounts whose past still counts in reports: the live ones, plus closed
+  # accounts, whose history stays in income statements, budgets and investment
+  # reports. A disabled account is hidden from these, a closed one is not.
+  REPORTABLE_STATUSES = (VISIBLE_STATUSES + %w[closed]).freeze
+  HISTORICAL_STATUSES = (VISIBLE_STATUSES + %w[disabled closed]).freeze
 
   scope :visible, -> { where(status: VISIBLE_STATUSES) }
+  scope :reportable, -> { where(status: REPORTABLE_STATUSES) }
   scope :historical, -> { where(status: HISTORICAL_STATUSES) }
   # Accounts whose data should be included in financial reports, dashboards,
   # and exports. Excludes accounts where the user has opted to suppress them.
@@ -153,6 +160,7 @@ class Account < ApplicationRecord
     state :active, initial: true
     state :draft
     state :disabled
+    state :closed
     state :pending_deletion
 
     event :activate do
@@ -167,8 +175,18 @@ class Account < ApplicationRecord
       transitions from: :disabled, to: :active
     end
 
+    # An account that is over: its history stays, nothing new may be dated after
+    # closed_on, and it stops syncing. Use #close_on! so closed_on is set with it.
+    event :close do
+      transitions from: [ :draft, :active, :disabled ], to: :closed
+    end
+
+    event :reopen do
+      transitions from: :closed, to: :active, after: -> { self.closed_on = nil }
+    end
+
     event :mark_for_deletion do
-      transitions from: [ :draft, :active, :disabled ], to: :pending_deletion
+      transitions from: [ :draft, :active, :disabled, :closed ], to: :pending_deletion
     end
   end
 
@@ -728,6 +746,47 @@ class Account < ApplicationRecord
     AccountShare.insert_all(records, unique_by: %i[account_id user_id]) if records.any?
   end
 
+  # Closes the account as of a date. History is kept; nothing new may be dated
+  # after `date` and the account stops syncing. Raises ActiveRecord::RecordInvalid
+  # when the account already has entries after that date, and
+  # AASM::InvalidTransition when it cannot be closed from its current state.
+  #
+  # @param date [Date, String] the last day the account was open
+  def close_on!(date)
+    transaction do
+      self.closed_on = date.to_date
+      close
+      save!
+    end
+  end
+
+  # Brings a closed account back. Raises AASM::InvalidTransition unless closed.
+  def reopen_account!
+    transaction do
+      reopen
+      save!
+    end
+  end
+
+  # The last date this account counts toward net worth history, or nil when it
+  # still counts through today. A disabled account stops the day before it was
+  # disabled; a closed one stops on its closed date, after which it contributes
+  # nothing -- the same as a $0 balance.
+  def active_until
+    if closed?
+      closed_on
+    elsif disabled?
+      (disabled_at || updated_at).to_date - 1.day
+    end
+  end
+
+  # A closed account does not sync: its balances stop at the closed date.
+  def sync_later(**)
+    return nil if closed?
+
+    super
+  end
+
   private
 
     def assign_default_owner
@@ -746,6 +805,13 @@ class Account < ApplicationRecord
           family&.users&.where(role: "super_admin")&.order(:created_at, :id)&.first ||
           family&.users&.order(:created_at, :id)&.first
       end
+    end
+
+    def no_entries_after_closed_on
+      count = entries.where("entries.date > ?", closed_on).count
+      return if count.zero?
+
+      errors.add(:closed_on, :entries_after, count: count)
     end
 
     def owner_belongs_to_family
