@@ -25,6 +25,10 @@
           <div class="flex items-center gap-1.5">
             <%= link_to account.name, account, class: [(account.active? ? "text-primary" : "text-subdued"), "text-sm font-medium hover:underline"], data: { turbo_frame: "_top", clickable_row_target: "link" } %>
 
+            <% if account.closed? && account.closed_on %>
+              <%= render DS::Pill.new(label: t("accounts.account.closed_on", date: l(account.closed_on, format: :long)), marker: false, tone: :neutral, size: :sm) %>
+            <% end %>
+
             <% if account.exclude_from_reports? %>
               <%= render DS::Tooltip.new(text: t("accounts.account.excluded_from_reports_indicator"), as: :span) do %>
                 <%= icon("eye-off", class: "w-3.5 h-3.5 text-secondary") %>
@@ -103,6 +107,12 @@
               <% menu.with_item(variant: "button", text: t("accounts.account.disable"), href: toggle_active_account_path(account), method: :patch, icon: "toggle-right", data: { turbo_frame: :_top }) %>
             <% elsif account.disabled? %>
               <% menu.with_item(variant: "button", text: t("accounts.account.enable"), href: toggle_active_account_path(account), method: :patch, icon: "toggle-left", data: { turbo_frame: :_top }) %>
+            <% end %>
+
+            <% if account.closed? %>
+              <% menu.with_item(variant: "button", text: t("accounts.account.reopen"), href: reopen_account_path(account), method: :patch, icon: "rotate-ccw", data: { turbo_frame: :_top }) %>
+            <% else %>
+              <% menu.with_item(variant: "link", text: t("accounts.account.close"), href: confirm_close_account_path(account), icon: "archive", data: { turbo_frame: :modal }) %>
             <% end %>
 
             <% if account.exclude_from_reports? %>

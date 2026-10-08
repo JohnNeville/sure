@@ -1000,6 +1000,33 @@ class Api::V1::TradesControllerTest < ActionDispatch::IntegrationTest
     assert trade_data.key?("notes")
   end
 
+  test "a trade after the account's closed date is rejected, and closed history stays readable" do
+    account = accounts(:investment)
+    security = Security.create!(ticker: "CLSD", name: "Closed Security", country_code: "US")
+    old_trade = account.trades.first
+    closed_on = Date.current
+
+    account.close_on!(closed_on)
+
+    get api_v1_trade_url(old_trade.id), headers: api_headers(read_write_api_key)
+    assert_response :success
+
+    assert_no_difference("Entry.count") do
+      post "/api/v1/trades",
+        params: { trade: { account_id: account.id, type: "buy", date: closed_on + 1.day, qty: 1, price: 10, security_id: security.id } },
+        headers: api_headers(read_write_api_key), as: :json
+    end
+    assert_response :unprocessable_entity
+    assert_match(/after this account was closed on/, JSON.parse(response.body)["errors"].to_sentence)
+
+    assert_difference("Entry.count", 1) do
+      post "/api/v1/trades",
+        params: { trade: { account_id: account.id, type: "buy", date: closed_on, qty: 1, price: 10, security_id: security.id } },
+        headers: api_headers(read_write_api_key), as: :json
+    end
+    assert_response :created
+  end
+
   private
 
     def read_write_api_key
