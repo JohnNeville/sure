@@ -847,6 +847,23 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "a manual loan offers to link to a provider" do
+    loan = accounts(:loan)
+    assert_not loan.linked?
+
+    get accounts_url
+
+    assert_response :success
+    assert_includes response.body, select_provider_account_path(loan)
+  end
+
+  test "select_provider lists providers that support loans" do
+    get select_provider_account_url(accounts(:loan))
+
+    assert_response :success
+    assert_includes response.body, I18n.t("accounts.select_provider.title")
+  end
+
   test "set_default sets user default account" do
     patch set_default_account_url(@account)
     assert_redirected_to accounts_path
