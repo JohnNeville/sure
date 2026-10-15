@@ -26,11 +26,6 @@ class SyncVehicleValuationsJob < ApplicationJob
       next unless account&.active?
       next if vehicle.avm_last_synced_on == Date.current
 
-      if %i[year make model].any? { |field| vehicle[field].blank? }
-        capture_failure(vehicle, account, "Skipping refresh: vehicle year, make or model is missing", level: "warn")
-        next
-      end
-
       unless providers.key?(vehicle.avm_provider)
         providers[vehicle.avm_provider] = begin
           registry.get_provider(vehicle.avm_provider)
@@ -41,32 +36,11 @@ class SyncVehicleValuationsJob < ApplicationJob
 
       provider = providers[vehicle.avm_provider]
       next unless provider # API key was removed after the vehicle was linked
-      next unless provider.requests_remaining?
 
-      # The account was created in the provider's currency, but the user can
-      # change it later. Writing a USD value as another currency would corrupt
-      # the balance, so skip mismatches — before spending credits.
-      unless account.currency == provider.valuation_currency
-        capture_failure(vehicle, account, "Skipping refresh: account currency #{account.currency} does not match provider valuation currency #{provider.valuation_currency}", level: "warn")
-        next
-      end
+      result = Vehicle::ValuationRefresh.new(vehicle, provider: provider).call
+      next unless result.message
 
-      response = provider.fetch_vehicle_valuation(year: vehicle.year, make: vehicle.make, model: vehicle.model)
-
-      if response.success?
-        result = nil
-        Vehicle.transaction do
-          result = account.set_current_balance(response.data.valuation)
-          raise ActiveRecord::Rollback unless result.success?
-          vehicle.update!(avm_last_synced_on: Date.current)
-        end
-
-        unless result&.success?
-          capture_failure(vehicle, account, "Failed to update valuation balance: #{result&.error}")
-        end
-      else
-        capture_failure(vehicle, account, "Valuation refresh failed: #{response.error.message}")
-      end
+      capture_failure(vehicle, account, result.message, level: result.status == :failed ? "error" : "warn")
     rescue => e
       capture_failure(vehicle, vehicle.account, "Error refreshing valuation: #{e.class} - #{e.message}")
     end
