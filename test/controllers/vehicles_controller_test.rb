@@ -203,4 +203,87 @@ class VehiclesControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_entity
   end
+  test "refresh_valuation fetches a new value and records the refresh" do
+    vehicle = link_to_cardog
+    provider = stub_refresh_provider
+    provider.expects(:fetch_vehicle_valuation).with(year: 2021, make: "Honda", model: "Accord")
+      .returns(Provider::Response.new(success?: true, data: refresh_valuation_data(21_450), error: nil))
+
+    post refresh_valuation_vehicle_path(@account)
+
+    assert_redirected_to account_path(@account)
+    assert_match "Valuation refreshed", flash[:notice]
+    assert_equal 21_450, @account.reload.balance
+    assert_equal Date.current, vehicle.reload.avm_last_synced_on
+  end
+
+  test "refresh_valuation does not spend credits twice in one day" do
+    link_to_cardog.update!(avm_last_synced_on: Date.current)
+    provider = stub_refresh_provider
+    provider.expects(:fetch_vehicle_valuation).never
+
+    post refresh_valuation_vehicle_path(@account)
+
+    assert_equal I18n.t("vehicles.refresh_valuation.already_synced"), flash[:alert]
+  end
+
+  test "refresh_valuation refuses when the monthly budget is spent" do
+    link_to_cardog
+    provider = stub_refresh_provider(requests_remaining: false)
+    provider.expects(:fetch_vehicle_valuation).never
+
+    post refresh_valuation_vehicle_path(@account)
+
+    assert_equal I18n.t("vehicles.refresh_valuation.budget_spent"), flash[:alert]
+  end
+
+  test "refresh_valuation reports a provider failure and logs it" do
+    link_to_cardog
+    provider = stub_refresh_provider
+    provider.stubs(:fetch_vehicle_valuation)
+      .returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("boom")))
+
+    assert_difference -> { DebugLogEntry.count }, 1 do
+      post refresh_valuation_vehicle_path(@account)
+    end
+
+    assert_equal I18n.t("vehicles.refresh_valuation.failed"), flash[:alert]
+    assert_equal 18_000, @account.reload.balance
+  end
+
+  test "refresh_valuation needs a linked provider" do
+    post refresh_valuation_vehicle_path(@account)
+
+    assert_equal I18n.t("vehicles.refresh_valuation.not_linked"), flash[:alert]
+  end
+
+  test "overview offers the refresh button only for provider-linked vehicles" do
+    get account_path(@account, tab: "overview")
+    assert_no_match(/refresh_valuation/, response.body)
+
+    link_to_cardog
+    get account_path(@account, tab: "overview")
+    assert_includes response.body, refresh_valuation_vehicle_path(@account)
+  end
+
+  private
+    def link_to_cardog
+      vehicle = @account.vehicle
+      vehicle.update!(make: "Honda", model: "Accord", year: 2021, avm_provider: "cardog")
+      vehicle
+    end
+
+    def stub_refresh_provider(requests_remaining: true)
+      provider = mock
+      provider.stubs(:requests_remaining?).returns(requests_remaining)
+      provider.stubs(:valuation_currency).returns("USD")
+      Provider::Registry.stubs(:cardog).returns(provider)
+      provider
+    end
+
+    def refresh_valuation_data(amount)
+      Provider::VehicleValuationConcept::VehicleValuation.new(
+        valuation: amount, currency: "USD", year: 2021, make: "Honda", model: "Accord"
+      )
+    end
 end

@@ -29,6 +29,15 @@ en:
       avm_preview_back: "Back"
       avm_preview_confirm: "Add vehicle"
       avm_preview_market_value: "Market price estimate"
+    refresh_valuation:
+      refreshed: "Valuation refreshed: %{value}"
+      already_synced: "This vehicle was already refreshed today."
+      budget_spent: "Not enough credits left this month for another lookup."
+      missing_fields: "Add the vehicle's year, make and model before refreshing."
+      currency_mismatch: "The account currency doesn't match the provider's valuation currency, so the value can't be refreshed."
+      failed: "The valuation provider couldn't refresh this vehicle. Check the debug log for details."
+      inactive: "Only active accounts can be refreshed."
+      not_linked: "This vehicle isn't linked to a valuation provider."
     overview:
       current_price: Current Price
       make_model: Make & Model
@@ -47,3 +56,9 @@ en:
         unknown: Unknown
         year: Year
         edit_account_details: "Edit account details"
+        refresh_valuation: "Refresh valuation"
+        refresh_confirm_title: "Refresh valuation now?"
+        refresh_confirm_body: "This asks %{provider} for a new estimate and uses part of this month's credits (a lookup costs 6). It can run once a day per vehicle."
+        refresh_confirm_button: "Refresh"
+        last_refreshed: "Last refreshed %{date}"
+        never_refreshed: "Not refreshed yet"
