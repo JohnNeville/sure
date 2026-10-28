@@ -142,6 +142,7 @@ en:
         label: Review status
         reviewed: Reviewed
         unreviewed: Not reviewed
+        equal_to: Equal to
       transaction_excluded:
         label: Excluded from budgeting and reports
         'yes': 'Yes'

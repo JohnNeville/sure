@@ -398,13 +398,13 @@ en:
           ai_history: AI history
           attachment_with: With attachment
           attachment_without: Without attachment
-        attachment_filter:
-          with: With attachment
-          without: Without attachment
           reviewed: Reviewed
           unreviewed: Not reviewed
           excluded: Excluded from reports
           included: Included in reports
+        attachment_filter:
+          with: With attachment
+          without: Without attachment
         ai_filter:
           current: AI
           current_description: Category is still the one assigned automatically (AI or Bayes).
