@@ -571,6 +571,53 @@ class TransactionTest < ActiveSupport::TestCase
     assert_empty scope.category_from("ai", metadata: { confidence: 0.5 }).pluck(:id)
   end
 
+  test "reviewed? and the reviewed scopes follow reviewed_at" do
+    family = families(:empty)
+    account = family.accounts.create! name: "Test", balance: 0, currency: "USD", accountable: Depository.new
+    unreviewed = create_transaction(account: account, amount: 10).entryable
+    reviewed = create_transaction(account: account, amount: 20).entryable
+    reviewed.update_columns(reviewed_at: Time.current)
+
+    assert_not unreviewed.reviewed?
+    assert reviewed.reviewed?
+    assert_equal [ reviewed ], family.transactions.reviewed.to_a
+    assert_equal [ unreviewed ], family.transactions.unreviewed.to_a
+  end
+
+  test "mark_reviewed! sets and clears reviewed_at and touches the entry" do
+    family = families(:empty)
+    account = family.accounts.create! name: "Test", balance: 0, currency: "USD", accountable: Depository.new
+    entry = create_transaction(account: account, amount: 10)
+    transaction = entry.entryable
+    original_updated_at = entry.updated_at
+
+    travel 1.minute do
+      transaction.mark_reviewed!
+    end
+
+    assert transaction.reload.reviewed?
+    assert_operator entry.reload.updated_at, :>, original_updated_at
+
+    transaction.mark_reviewed!(false)
+    assert_not transaction.reload.reviewed?
+  end
+
+  test "with_review_state narrows to one state and ignores both, none or unknown" do
+    family = families(:empty)
+    account = family.accounts.create! name: "Test", balance: 0, currency: "USD", accountable: Depository.new
+    reviewed = create_transaction(account: account, amount: 10).entryable
+    reviewed.mark_reviewed!
+    unreviewed = create_transaction(account: account, amount: 20).entryable
+
+    assert_equal [ reviewed ], family.transactions.with_review_state([ "reviewed" ]).to_a
+    assert_equal [ unreviewed ], family.transactions.with_review_state([ "unreviewed" ]).to_a
+    assert_equal [ reviewed, unreviewed ].sort_by(&:id), family.transactions.with_review_state([ "reviewed", "unreviewed" ]).sort_by(&:id)
+    assert_equal 2, family.transactions.with_review_state([]).count
+    assert_equal 2, family.transactions.with_review_state(nil).count
+    assert_equal 2, family.transactions.with_review_state([ "bogus" ]).count
+    assert_equal [ "reviewed" ], Transaction.narrowing_review_states([ "reviewed", "bogus" ])
+  end
+
   private
     # Whether each SQL form of "is this transaction pending?" says it is.
     def sql_pending_answers(transaction)

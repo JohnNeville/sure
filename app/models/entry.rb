@@ -650,9 +650,22 @@ class Entry < ApplicationRecord
       }.compact_blank
 
       tag_ids = Array.wrap(bulk_update_params[:tag_ids]).reject(&:blank?)
-      has_updates = bulk_attributes.present? || update_tags
+
+      # How the review state changes. Callers that say nothing (the Categorize
+      # flow) mark edited transactions reviewed, as a single edit does; the bulk
+      # edit drawer sends "unchanged" by default so editing leaves it alone.
+      review_mode = case bulk_update_params[:reviewed].to_s
+      when "unchanged" then :unchanged
+      when "true" then :reviewed
+      when "false" then :unreviewed
+      else :when_edited
+      end
+      has_updates = bulk_attributes.present? || update_tags || review_mode.in?(%i[reviewed unreviewed])
 
       return 0 unless has_updates
+
+      reviewed_entries = []
+      unreviewed_entries = []
 
       transaction do
         all.each do |entry|
@@ -685,6 +698,23 @@ class Entry < ApplicationRecord
             entry.lock_saved_attributes!
             entry.mark_user_modified!
           end
+
+          if entry.transaction?
+            case review_mode
+            when :reviewed then reviewed_entries << entry
+            when :unreviewed then unreviewed_entries << entry
+            when :when_edited then reviewed_entries << entry if changed
+            end
+          end
+        end
+
+        # One write per state rather than per entry. Touching the entries keeps
+        # caches keyed on them, such as search totals, current.
+        { reviewed_entries => Time.current, unreviewed_entries => nil }.each do |entries, reviewed_at|
+          next if entries.empty?
+
+          Transaction.where(id: entries.map(&:entryable_id)).update_all(reviewed_at: reviewed_at)
+          Entry.where(id: entries.map(&:id)).update_all(updated_at: Time.current)
         end
       end
 

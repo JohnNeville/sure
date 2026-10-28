@@ -134,4 +134,34 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
 
     assert_empty member_result[:transactions]
   end
+
+  test "reports the reviewed state of each transaction" do
+    @transaction.mark_reviewed!
+
+    result = @function.call("search" => @transaction.entry.name)
+
+    row = result[:transactions].find { |item| item[:id] == @transaction.id }
+    assert_equal true, row[:reviewed]
+  end
+
+  test "filters by reviewed state" do
+    reviewed_entry = Entry.create!(account: accounts(:depository), name: "AI reviewed lookup", date: Date.current, amount: 5, currency: "USD", entryable: Transaction.new)
+    reviewed_entry.entryable.mark_reviewed!
+    unreviewed_entry = Entry.create!(account: accounts(:depository), name: "AI unreviewed lookup", date: Date.current, amount: 6, currency: "USD", entryable: Transaction.new)
+
+    reviewed_ids = @function.call("reviewed" => true, "page_size" => 100)[:transactions].map { |row| row[:id] }
+    unreviewed_ids = @function.call("reviewed" => false, "page_size" => 100)[:transactions].map { |row| row[:id] }
+    all_ids = @function.call("page_size" => 100)[:transactions].map { |row| row[:id] }
+
+    assert_includes reviewed_ids, reviewed_entry.entryable_id
+    assert_not_includes reviewed_ids, unreviewed_entry.entryable_id
+    assert_includes unreviewed_ids, unreviewed_entry.entryable_id
+    assert_not_includes unreviewed_ids, reviewed_entry.entryable_id
+    assert_includes all_ids, reviewed_entry.entryable_id
+    assert_includes all_ids, unreviewed_entry.entryable_id
+  end
+
+  test "documents the reviewed filter in the parameter schema" do
+    assert_equal "boolean", @function.params_schema.dig(:properties, :reviewed, :type)
+  end
 end

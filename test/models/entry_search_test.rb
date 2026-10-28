@@ -129,4 +129,33 @@ class EntrySearchTest < ActiveSupport::TestCase
 
     assert_includes result_ids, txn.id
   end
+
+  test "reviewed filter narrows to reviewed transactions" do
+    reviewed, _unreviewed, _valuation = review_fixtures
+
+    assert_equal [ reviewed ], @account.entries.search({ reviewed: [ "reviewed" ] }).to_a
+  end
+
+  test "unreviewed filter narrows to unreviewed transactions" do
+    _reviewed, unreviewed, _valuation = review_fixtures
+
+    assert_equal [ unreviewed ], @account.entries.search({ reviewed: [ "unreviewed" ] }).to_a
+  end
+
+  test "selecting both review states, or none, applies no review filter" do
+    everything = review_fixtures.sort_by(&:id)
+
+    assert_equal everything, @account.entries.search({ reviewed: [ "reviewed", "unreviewed" ] }).to_a.sort_by(&:id)
+    assert_equal everything, @account.entries.search({ reviewed: [] }).to_a.sort_by(&:id)
+    assert_equal everything, @account.entries.search({}).to_a.sort_by(&:id)
+  end
+
+  private
+    def review_fixtures
+      reviewed = create_transaction(account: @account, amount: 10, name: "Reviewed one")
+      reviewed.transaction.mark_reviewed!
+      unreviewed = create_transaction(account: @account, amount: 20, name: "Unreviewed one")
+      valuation = create_valuation(account: @account, amount: 500)
+      [ reviewed, unreviewed, valuation ]
+    end
 end

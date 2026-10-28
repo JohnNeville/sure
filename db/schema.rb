@@ -2782,6 +2782,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_090001) do
     t.string "kind", default: "standard", null: false
     t.jsonb "locked_attributes", default: {}
     t.uuid "merchant_id"
+    t.datetime "reviewed_at"
     t.uuid "transfer_id"
     t.datetime "updated_at", null: false
     t.index "(((extra -> 'goal'::text) ->> 'pledge_id'::text))", name: "ix_transactions_extra_goal_pledge_id", unique: true, where: "(((extra -> 'goal'::text) ->> 'pledge_id'::text) IS NOT NULL)"
@@ -2791,6 +2792,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_090001) do
     t.index ["investment_activity_label"], name: "index_transactions_on_investment_activity_label"
     t.index ["kind"], name: "index_transactions_on_kind"
     t.index ["merchant_id"], name: "index_transactions_on_merchant_id"
+    t.index ["reviewed_at"], name: "index_transactions_on_unreviewed", where: "(reviewed_at IS NULL)"
     t.index ["transfer_id"], name: "index_transactions_on_transfer_id"
   end
 
