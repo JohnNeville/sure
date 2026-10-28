@@ -16,6 +16,12 @@ class TransferMatchesController < ApplicationController
     Transfer.transaction do
       @transfer.save!
       @transfer.confirm!
+
+      # The user has now matched this pair, so an earlier rejection no longer applies.
+      RejectedTransfer.where(
+        inflow_transaction_id: @transfer.inflow_transaction_id,
+        outflow_transaction_id: @transfer.outflow_transaction_id
+      ).delete_all
     end
 
     @transfer.sync_account_later

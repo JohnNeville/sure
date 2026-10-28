@@ -6,6 +6,11 @@ class Transfer < ApplicationRecord
 
   attr_accessor :source_fee_amount, :destination_fee_amount, :tag_ids
 
+  # Set on unsaved candidates offered for manual matching: the user rejected
+  # this exact pair before. Automatic matching never proposes it again, but a
+  # manual match is still allowed.
+  attr_accessor :previously_rejected
+
   enum :status, { pending: "pending", confirmed: "confirmed" }
 
   validates :inflow_transaction_id, uniqueness: true
