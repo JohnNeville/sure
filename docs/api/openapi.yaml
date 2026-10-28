@@ -1821,6 +1821,12 @@ components:
           type: boolean
           description: Whether the transaction has been split; its amount is then
             carried by its split children.
+        extra:
+          type: object
+          additionalProperties: true
+          description: Provider and import details. Keys are provider-defined (for
+            example plaid or simplefin, written by bank sync) plus import and retail,
+            the namespaces API clients can write.
         account:
           "$ref": "#/components/schemas/Account"
         category:
@@ -10466,6 +10472,13 @@ paths:
           for transactions that still need review'
         schema:
           type: boolean
+      - name: excluded
+        in: query
+        required: false
+        description: 'Filter by whether transactions are excluded from budgets and
+          reports: true for excluded, false for included'
+        schema:
+          type: boolean
       responses:
         '200':
           description: transactions filtered by date range
@@ -10602,6 +10615,10 @@ paths:
                       type: boolean
                       description: Set the review state. Omit to leave a new transaction
                         unreviewed
+                    excluded:
+                      type: boolean
+                      description: Whether the transaction is excluded from budgets
+                        and reports. Omit to leave it unchanged
                     tag_ids:
                       type: array
                       items:
@@ -10754,6 +10771,10 @@ paths:
                     reviewed:
                       type: boolean
                       description: Set the review state. Omit to leave it unchanged
+                    excluded:
+                      type: boolean
+                      description: Whether the transaction is excluded from budgets
+                        and reports. Omit to leave it unchanged
         required: true
     delete:
       summary: Delete a transaction
