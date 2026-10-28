@@ -11,6 +11,7 @@ json.exchange_operating_mic security.exchange_operating_mic
 json.exchange_name security.exchange_name
 json.offline security.offline
 json.offline_reason security.offline_reason
+json.manual_prices security.manual_prices?
 json.website_url security.website_url
 json.logo_url security.display_logo_url
 json.first_provider_price_on security.first_provider_price_on
