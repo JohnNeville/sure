@@ -74,7 +74,7 @@ class IncomeStatement::Totals
         WHERE at.kind NOT IN (#{budget_excluded_kinds_sql})
           AND ae.excluded = false
           AND a.family_id = :family_id
-          AND a.status IN ('draft', 'active')
+          AND a.status IN ('draft', 'active', 'closed')
           AND a.exclude_from_reports = false
           #{exclude_tax_advantaged_sql}
           #{include_finance_accounts_sql}
@@ -100,7 +100,7 @@ class IncomeStatement::Totals
           #{investment_activity_label_sql("at")}
           AND ae.excluded = false
           AND a.family_id = :family_id
-          AND a.status IN ('draft', 'active')
+          AND a.status IN ('draft', 'active', 'closed')
           AND a.exclude_from_reports = false
           #{exclude_tax_advantaged_sql}
           #{include_finance_accounts_sql}

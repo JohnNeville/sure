@@ -17,6 +17,12 @@
       <% menu.with_item(variant: "button", text: t(".exclude_from_reports"), href: toggle_exclude_from_reports_account_path(account), method: :patch, icon: "eye-off", data: { turbo_frame: :_top }) %>
     <% end %>
 
+    <% if account.closed? %>
+      <% menu.with_item(variant: "button", text: t(".reopen_account"), href: reopen_account_path(account), method: :patch, icon: "rotate-ccw", data: { turbo_frame: :_top }) %>
+    <% elsif account.active? || account.disabled? %>
+      <% menu.with_item(variant: "link", text: t(".close_account"), href: confirm_close_account_path(account), icon: "archive", data: { turbo_frame: :modal }) %>
+    <% end %>
+
     <% if account.supports_trades? %>
       <% menu.with_item(
         variant: "link",

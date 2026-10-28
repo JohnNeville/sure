@@ -39,6 +39,7 @@ class Entry < ApplicationRecord
   validates :external_id, uniqueness: { scope: [ :account_id, :source ] }, if: -> { external_id.present? && source.present? }
 
   validate :cannot_unexclude_split_parent
+  validate :date_not_after_account_closed_on, if: -> { new_record? || will_save_change_to_date? }
   validate :split_child_date_matches_parent
 
   # new_record? && import_id.blank? keeps this to genuinely new manual
@@ -62,6 +63,11 @@ class Entry < ApplicationRecord
 
   scope :visible, -> {
     joins(:account).where(accounts: { status: [ "draft", "active" ] })
+  }
+
+  # Entries whose account still counts in reports: visible ones plus closed accounts.
+  scope :reportable, -> {
+    joins(:account).where(accounts: { status: Account::REPORTABLE_STATUSES })
   }
 
   scope :chronological, -> {
@@ -775,6 +781,15 @@ class Entry < ApplicationRecord
     # @return [Date]
     def track_earliest_saved_date
       @earliest_saved_date = [ @earliest_saved_date, date_before_last_save ].compact.min
+    end
+
+    # A closed account takes nothing new after its closed date. Only new entries and
+    # date changes are checked, so older rows that already sit after it stay editable.
+    def date_not_after_account_closed_on
+      return unless account&.closed? && account.closed_on && date.present?
+      return unless date > account.closed_on
+
+      errors.add(:date, :after_account_closed, closed_on: account.closed_on.to_fs(:long))
     end
 
     def cannot_unexclude_split_parent
