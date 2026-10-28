@@ -9,7 +9,8 @@ class Rule::Registry::TransactionResource < Rule::Registry
     Rule::ConditionFilter::TransactionDetails,
     Rule::ConditionFilter::TransactionNotes,
     Rule::ConditionFilter::TransactionAccount,
-    Rule::ConditionFilter::TransactionReviewStatus
+    Rule::ConditionFilter::TransactionReviewStatus,
+    Rule::ConditionFilter::TransactionExcluded
   ].freeze
 
   # Every action this resource knows, whether or not it is offered right now:
@@ -23,6 +24,7 @@ class Rule::Registry::TransactionResource < Rule::Registry
     Rule::ActionExecutor::SetInvestmentActivityLabel,
     Rule::ActionExecutor::ExcludeTransaction,
     Rule::ActionExecutor::MarkTransactionReviewed,
+    Rule::ActionExecutor::IncludeTransaction,
     Rule::ActionExecutor::SetAsTransferOrPayment,
     Rule::ActionExecutor::SplitTransaction,
     Rule::ActionExecutor::SendEmailNotification,

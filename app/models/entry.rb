@@ -503,6 +503,29 @@ class Entry < ApplicationRecord
     end
   end
 
+  # Hands the budgeting and reports flag back to its default, undoing a manual
+  # choice (a single edit, a bulk edit): the flag goes back to included, the lock
+  # that kept rules and syncs away from it is removed, and when that was the only
+  # manual change the entry stops being marked as user-modified, so provider
+  # syncs manage it again. Other manual changes, such as a category or a note,
+  # keep their own locks and the user-modified mark.
+  #
+  # Only applies where the user took the flag over, which is what the lock
+  # records. A transaction excluded by the system (a stale pending one, a
+  # converted trade's original) or by a rule has no such lock and is left alone.
+  #
+  # @return [Boolean] whether anything was reset
+  def reset_exclusion!
+    return false unless locked?(:excluded)
+
+    self.class.transaction do
+      update!(excluded: false, locked_attributes: locked_attributes.except("excluded"))
+      update!(user_modified: false) if locked_attributes.blank? && entryable&.locked_attributes.blank?
+    end
+
+    true
+  end
+
   def split_parent?
     child_entries.exists?
   end
@@ -651,6 +674,9 @@ class Entry < ApplicationRecord
 
       tag_ids = Array.wrap(bulk_update_params[:tag_ids]).reject(&:blank?)
 
+      excluded_choice = bulk_update_params[:excluded].to_s
+      excluded = ActiveModel::Type::Boolean.new.cast(excluded_choice) if excluded_choice.in?(%w[true false])
+      reset_exclusion = excluded_choice == "reset"
       # How the review state changes. Callers that say nothing (the Categorize
       # flow) mark edited transactions reviewed, as a single edit does; the bulk
       # edit drawer sends "unchanged" by default so editing leaves it alone.
@@ -660,7 +686,7 @@ class Entry < ApplicationRecord
       when "false" then :unreviewed
       else :when_edited
       end
-      has_updates = bulk_attributes.present? || update_tags || review_mode.in?(%i[reviewed unreviewed])
+      has_updates = bulk_attributes.present? || update_tags || review_mode.in?(%i[reviewed unreviewed]) || !excluded.nil? || reset_exclusion
 
       return 0 unless has_updates
 
@@ -672,10 +698,11 @@ class Entry < ApplicationRecord
           changed = false
 
           # Update standard attributes
-          if bulk_attributes.present?
+          if bulk_attributes.present? || !excluded.nil?
             attrs = bulk_attributes.dup
             attrs.delete(:date) if entry.split_child?
             attrs.delete(:entryable_attributes) unless entry.transaction?
+            attrs[:excluded] = excluded if !excluded.nil? && entry.transaction?
 
             if attrs.present?
               attrs[:entryable_attributes] = attrs[:entryable_attributes].dup if attrs[:entryable_attributes].present?
@@ -706,6 +733,10 @@ class Entry < ApplicationRecord
             when :when_edited then reviewed_entries << entry if changed
             end
           end
+
+          # After the edits above, so what they locked stays locked; a reset on
+          # its own is not an edit and must not lock or mark anything itself.
+          entry.reset_exclusion! if reset_exclusion && entry.transaction?
         end
 
         # One write per state rather than per entry. Touching the entries keeps

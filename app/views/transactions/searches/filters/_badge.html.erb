@@ -55,6 +55,9 @@
   <% elsif param_key == "reviewed" %>
     <div class="flex items-center gap-2 px-1">
       <%= icon("circle-check", size: "sm") %>
+  <% elsif param_key == "exclusion" %>
+    <div class="flex items-center gap-2 px-1">
+      <%= icon(param_value == "excluded" ? "eye-off" : "eye", size: "sm") %>
       <p><%= t(".#{param_value}") %></p>
     </div>
   <% elsif param_key == "ai_status" %>
