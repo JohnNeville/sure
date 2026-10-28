@@ -604,8 +604,35 @@ class FamilyTest < ActiveSupport::TestCase
   test "requests transaction refreshes for syncable Plaid items" do
     family = families(:dylan_family)
 
-    assert_enqueued_with job: PlaidTransactionsRefreshAllJob, args: [ family, { source: "TestSync" } ] do
+    assert_enqueued_with job: PlaidTransactionsRefreshAllJob, args: [ family, { source: "TestSync", force: false } ] do
       family.request_plaid_transactions_refreshes_later(source: "TestSync")
+    end
+  end
+
+  test "lists only syncable Plaid connections with a limited refresh interval" do
+    family = families(:dylan_family)
+    item = plaid_items(:one)
+
+    assert_empty family.plaid_items_with_limited_refresh
+
+    item.update!(refresh_interval: "weekly")
+    assert_equal [ item ], family.plaid_items_with_limited_refresh
+
+    item.update!(refresh_interval: "never")
+    assert_equal [ item ], family.plaid_items_with_limited_refresh
+
+    item.update!(billed_products: [ "investments" ])
+    assert_empty family.plaid_items_with_limited_refresh
+
+    item.update!(billed_products: [ "transactions" ], scheduled_for_deletion: true)
+    assert_empty family.plaid_items_with_limited_refresh
+  end
+
+  test "forwards force to the Plaid refresh orchestration for user-initiated syncs" do
+    family = families(:dylan_family)
+
+    assert_enqueued_with job: PlaidTransactionsRefreshAllJob, args: [ family, { source: "TestSync", force: true } ] do
+      family.request_plaid_transactions_refreshes_later(source: "TestSync", force: true)
     end
   end
 
