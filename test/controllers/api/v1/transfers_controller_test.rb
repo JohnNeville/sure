@@ -346,7 +346,7 @@ class Api::V1::TransfersControllerTest < ActionDispatch::IntegrationTest
         amount: amount,
         name: name,
         currency: account.currency,
-        entryable: Transaction.new(kind: "funds_movement")
+        entryable: Transaction.new(kind: "standard")
       )
       entry.entryable
     end
