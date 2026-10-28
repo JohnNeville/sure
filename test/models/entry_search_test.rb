@@ -150,6 +150,16 @@ class EntrySearchTest < ActiveSupport::TestCase
     assert_equal everything, @account.entries.search({}).to_a.sort_by(&:id)
   end
 
+  test "exclusion filter narrows entries by whether they count toward reports" do
+    excluded = create_transaction(account: @account, amount: 10, name: "Left out")
+    excluded.update_columns(excluded: true)
+    included = create_transaction(account: @account, amount: 20, name: "Counted")
+
+    assert_equal [ excluded ], @account.entries.search({ exclusion: [ "excluded" ] }).to_a
+    assert_equal [ included ], @account.entries.search({ exclusion: [ "included" ] }).to_a
+    assert_equal [ excluded, included ].sort_by(&:id), @account.entries.search({ exclusion: [ "excluded", "included" ] }).to_a.sort_by(&:id)
+  end
+
   private
     def review_fixtures
       reviewed = create_transaction(account: @account, amount: 10, name: "Reviewed one")

@@ -447,7 +447,7 @@ class AccountsController < ApplicationController
     def activity_search_params
       q = params.fetch(:q, {}).permit(
         :search, :start_date, :end_date, :amount, :amount_operator,
-        categories: [], tags: [], merchants: [], types: [], status: [], reviewed: []
+        categories: [], tags: [], merchants: [], types: [], status: [], reviewed: [], exclusion: []
       )
       q.delete(:amount_operator) unless q[:amount].present?
       q
