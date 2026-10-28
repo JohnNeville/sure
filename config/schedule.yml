@@ -43,6 +43,7 @@ sync_vehicle_valuations:
   cron: "45 1 1 * *" # monthly on the 1st at 1:45 AM
   class: "SyncVehicleValuationsJob"
   queue: "scheduled"
+  active_job: true
   description: "Refreshes vehicle valuations once a month (providers enforce tight monthly credit caps)"
 
 clean_data:
