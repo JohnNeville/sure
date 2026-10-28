@@ -738,7 +738,11 @@ Rails.application.routes.draw do
       post :link_valuation
     end
   end
-  resources :vehicles, only: %i[new create edit update]
+  resources :vehicles, only: %i[new create edit update] do
+    member do
+      post :refresh_valuation
+    end
+  end
   resources :credit_cards, only: %i[new create edit update]
   resources :loans, only: %i[new create edit update]
   resources :cryptos, only: %i[new create edit update]

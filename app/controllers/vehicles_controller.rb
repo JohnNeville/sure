@@ -1,6 +1,8 @@
 class VehiclesController < ApplicationController
   include AccountableResource
 
+  before_action :set_refreshable_account, only: :refresh_valuation
+
   permitted_accountable_attributes(
     :id, :make, :model, :year, :mileage_value, :mileage_unit
   )
@@ -16,7 +18,34 @@ class VehiclesController < ApplicationController
     super
   end
 
+  # Spends a lookup's credits on demand instead of waiting for the monthly job.
+  def refresh_valuation
+    vehicle = @account.vehicle
+    provider = vehicle.avm_provider.present? && Provider::Registry.for_concept(:vehicle_valuations).get_provider(vehicle.avm_provider)
+
+    if !@account.active?
+      return redirect_back_or_to account_path(@account), alert: t("vehicles.refresh_valuation.inactive")
+    elsif provider.blank?
+      return redirect_back_or_to account_path(@account), alert: t("vehicles.refresh_valuation.not_linked")
+    end
+
+    result = Vehicle::ValuationRefresh.new(vehicle, provider: provider).call
+
+    if result.refreshed?
+      redirect_back_or_to account_path(@account), notice: t("vehicles.refresh_valuation.refreshed", value: @account.reload.balance_money.format)
+    else
+      DebugLogEntry.capture(category: "provider_sync_error", level: "error", message: result.message, source: self.class.name, provider_key: vehicle.avm_provider, account: @account, metadata: { vehicle_id: vehicle.id }) if result.status == :failed
+      redirect_back_or_to account_path(@account), alert: t("vehicles.refresh_valuation.#{result.status}")
+    end
+  rescue Provider::Registry::Error
+    redirect_back_or_to account_path(@account), alert: t("vehicles.refresh_valuation.not_linked")
+  end
+
   private
+    def set_refreshable_account
+      set_manageable_account
+    end
+
     def create_via_avm_provider
       @avm_providers = configured_avm_providers
       provider_key = params[:avm_provider].to_s
