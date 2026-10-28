@@ -1805,6 +1805,12 @@ components:
           type: boolean
           description: Whether the transaction has been split; its amount is then
             carried by its split children.
+        extra:
+          type: object
+          additionalProperties: true
+          description: Provider and import details. Keys are provider-defined (for
+            example plaid or simplefin, written by bank sync) plus import and retail,
+            the namespaces API clients can write.
         account:
           "$ref": "#/components/schemas/Account"
         category:
