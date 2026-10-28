@@ -969,6 +969,11 @@ RSpec.configure do |config|
               },
               excluded: { type: :boolean, description: 'Whether the transaction is excluded from budget and report totals. Splitting a transaction marks it excluded.' },
               split_parent: { type: :boolean, description: 'Whether the transaction has been split; its amount is then carried by its split children.' },
+              extra: {
+                type: :object,
+                additionalProperties: true,
+                description: 'Provider and import details. Keys are provider-defined (for example plaid or simplefin, written by bank sync) plus import and retail, the namespaces API clients can write.'
+              },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },
               merchant: { '$ref' => '#/components/schemas/Merchant', nullable: true },
@@ -1678,6 +1683,11 @@ RSpec.configure do |config|
               qty: { type: :string },
               price: { type: :string },
               investment_activity_label: { type: :string, nullable: true },
+              extra: {
+                type: :object,
+                additionalProperties: true,
+                description: 'Provider and import details. Keys are provider-defined, plus import, the namespace API clients can write.'
+              },
               account: { '$ref' => '#/components/schemas/Account' },
               security: {
                 type: :object,

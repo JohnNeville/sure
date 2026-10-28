@@ -6,6 +6,7 @@ class Api::V1::TradesController < Api::V1::BaseController
   before_action :ensure_read_scope, only: [ :index, :show ]
   before_action :ensure_write_scope, only: [ :create, :update, :destroy ]
   before_action :set_trade, only: [ :show, :update, :destroy ]
+  before_action :validate_import_extra, only: [ :create, :update ]
 
   def index
     family = current_resource_owner.family
@@ -69,6 +70,7 @@ class Api::V1::TradesController < Api::V1::BaseController
     if model.is_a?(Entry)
       model.lock_saved_attributes!
       model.mark_user_modified!
+      apply_import_extra(model.entryable)
       model.sync_account_later
 
       if model.entryable.is_a?(Transaction)
@@ -83,6 +85,7 @@ class Api::V1::TradesController < Api::V1::BaseController
       @transfer = model
       render template: "api/v1/transfers/show", status: :created
     else
+      apply_import_extra(model)
       @trade = model
       @entry = @trade.entry
       render :show, status: :created
@@ -102,6 +105,7 @@ class Api::V1::TradesController < Api::V1::BaseController
     if @entry.update(updatable.except(:nature))
       @entry.lock_saved_attributes!
       @entry.mark_user_modified!
+      apply_import_extra(@entry.trade)
       @entry.sync_account_later
       @trade = @entry.trade
       render :show
@@ -138,6 +142,39 @@ class Api::V1::TradesController < Api::V1::BaseController
 
     def ensure_write_scope
       authorize_scope!(:write)
+    end
+
+    # Clients may write only extra["import"] -- the rest of extra belongs to the
+    # sync providers and to Sure. Validated before anything is created so a bad
+    # request changes nothing, and applied after lock_saved_attributes! so the
+    # column is not locked against sync the way a user edit would be.
+    def extra_provided?
+      params[:trade].respond_to?(:key?) && params[:trade].key?(:extra)
+    end
+
+    def client_extra
+      Transaction::ClientExtra.new(params.dig(:trade, :extra), namespaces: %w[import])
+    end
+
+    def validate_import_extra
+      return unless extra_provided?
+
+      request = client_extra
+      request.apply_to(@trade&.extra) if request.valid?
+      message = request.errors.first
+      # A transfer is two transactions, so there is no single record for extra to describe.
+      message ||= "extra is not supported when creating a transfer" if action_name == "create" && trade_params[:transfer_account_id].present?
+      return if message.nil?
+
+      render_validation_error(message, [ message ])
+    end
+
+    # @param record [Trade, Transaction] the created or updated record
+    def apply_import_extra(record)
+      return unless extra_provided?
+
+      merged = client_extra.apply_to(record.extra)
+      record.update!(extra: merged) unless merged == record.extra
     end
 
     def apply_filters(query)

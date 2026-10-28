@@ -180,6 +180,13 @@ RSpec.describe 'API V1 Trades', type: :request do
               manual_ticker: { type: :string, description: 'Manual ticker for offline securities' },
               currency: { type: :string, description: 'Currency (defaults to account currency)' },
               investment_activity_label: { type: :string, description: 'Activity label (e.g. Buy, Sell)' },
+              extra: {
+                type: :object,
+                description: 'Only the import key is accepted; it is deep-merged into the existing extra and never replaces other keys. Values are strings (numbers are stringified, at most 1000 characters), keys lowercase letters, digits and underscores, at most 30 keys. A null or blank value removes that key and import: null removes the whole namespace. Suggested keys: original_description, posting_date, bank_transaction_id, reference, check_number, original_memo, original_category, source, source_account. Not supported when creating a transfer.',
+                properties: {
+                  import: { type: :object, nullable: true, additionalProperties: { type: :string, nullable: true } }
+                }
+              },
               category_id: { type: :string, format: :uuid, description: 'Category ID' },
               transfer_account_id: { type: :string, format: :uuid, description: 'Destination/source account ID for linked transfers. Must be an account the user can write to; otherwise the request returns 404.' }
             },
@@ -532,7 +539,14 @@ RSpec.describe 'API V1 Trades', type: :request do
               notes: { type: :string },
               currency: { type: :string },
               investment_activity_label: { type: :string },
-              category_id: { type: :string, format: :uuid }
+              category_id: { type: :string, format: :uuid },
+              extra: {
+                type: :object,
+                description: 'Only the import key is accepted; it is deep-merged into the existing extra and never replaces other keys. Values are strings (numbers are stringified, at most 1000 characters), keys lowercase letters, digits and underscores, at most 30 keys. A null or blank value removes that key and import: null removes the whole namespace. Suggested keys: original_description, posting_date, bank_transaction_id, reference, check_number, original_memo, original_category, source, source_account. Not supported when creating a transfer.',
+                properties: {
+                  import: { type: :object, nullable: true, additionalProperties: { type: :string, nullable: true } }
+                }
+              }
             }
           }
         }
