@@ -368,4 +368,44 @@ class SecurityTest < ActiveSupport::TestCase
 
     assert_nil security.crypto_base_asset
   end
+
+  test "enable_manual_prices! takes a security off every automatic price path and keeps its prices" do
+    security = Security.create!(ticker: "MANUALM", price_provider: "twelve_data", offline: false, failed_fetch_count: 3, failed_fetch_at: Time.current)
+    Security::Price.create!(security: security, date: Date.current, price: 5, currency: "USD")
+
+    security.enable_manual_prices!
+    security.reload
+
+    assert security.manual_prices?
+    assert security.offline?
+    assert_nil security.price_provider
+    assert_equal 0, security.failed_fetch_count
+    assert_nil security.failed_fetch_at
+    assert_equal 1, security.prices.count
+    assert_includes Security.manual_prices, security
+    assert_not_includes Security.excluding_manual_prices, security
+  end
+
+  test "disable_manual_prices! clears only the manual reason and stays offline" do
+    security = Security.create!(ticker: "MANUALOFF")
+    security.enable_manual_prices!
+
+    security.disable_manual_prices!
+
+    assert_not security.reload.manual_prices?
+    assert security.offline?
+
+    other = Security.create!(ticker: "OTHERREASON", offline: true, offline_reason: "health_check_failed")
+    other.disable_manual_prices!
+    assert_equal "health_check_failed", other.reload.offline_reason
+  end
+
+  test "a manually priced security's stored prices are the ones used" do
+    security = Security.create!(ticker: "MANUALPX")
+    security.enable_manual_prices!
+    price = Security::Price.create!(security: security, date: Date.current, price: 33.25, currency: "USD")
+
+    assert_equal price, security.find_or_fetch_price(date: Date.current)
+    assert_nil security.find_or_fetch_price(date: Date.current - 1.day), "no provider is asked for a date with no stored price"
+  end
 end

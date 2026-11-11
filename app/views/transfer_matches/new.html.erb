@@ -25,7 +25,7 @@
                 ) %>
           <% else %>
             <%= render "transfer_matches/matching_fields",
-                        form: f, entry: @entry, candidates: @candidate_entries, accounts: @accounts %>
+                        form: f, entry: @entry, candidates: @candidate_entries, accounts: @accounts, rejected_entry_ids: @rejected_entry_ids %>
           <% end %>
         </div>
       </section>
@@ -52,7 +52,7 @@
                 ) %>
           <% else %>
             <%= render "transfer_matches/matching_fields",
-                        form: f, entry: @entry, candidates: @candidate_entries, accounts: @accounts %>
+                        form: f, entry: @entry, candidates: @candidate_entries, accounts: @accounts, rejected_entry_ids: @rejected_entry_ids %>
           <% end %>
         </div>
       </section>

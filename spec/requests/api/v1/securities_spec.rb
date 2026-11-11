@@ -16,7 +16,8 @@ RSpec.describe 'API V1 Securities', type: :request do
     family.users.create!(
       email: 'api-user@example.com',
       password: 'password123',
-      password_confirmation: 'password123'
+      password_confirmation: 'password123',
+      role: 'admin'
     )
   end
 
@@ -99,6 +100,9 @@ RSpec.describe 'API V1 Securities', type: :request do
       parameter name: :offline, in: :query, required: false,
                 description: 'Filter by offline status. When supplied, must be true or false.',
                 schema: { type: :boolean }
+      parameter name: :manual_prices, in: :query, required: false,
+                description: 'Filter to securities whose prices are loaded by hand (true) or not (false).',
+                schema: { type: :boolean }
 
       response '200', 'securities listed' do
         schema '$ref' => '#/components/schemas/SecurityCollection'
@@ -169,6 +173,72 @@ RSpec.describe 'API V1 Securities', type: :request do
         schema '$ref' => '#/components/schemas/ErrorResponse'
 
         let(:id) { SecureRandom.uuid }
+
+        run_test!
+      end
+    end
+
+    patch 'Turn manual prices on or off for a security' do
+      tags 'Securities'
+      description 'manual_prices=true marks the security offline with reason "manual" and clears its price provider, ' \
+                  'so the health check, the daily price import and provider toggles leave it alone and prices are loaded ' \
+                  'with POST /api/v1/security_prices. false clears the manual reason and leaves the security offline. ' \
+                  'Prices are shared by every family on the instance, so this needs an admin and a security the family holds or traded.'
+      security [ { apiKeyAuth: [] } ]
+      consumes 'application/json'
+      produces 'application/json'
+
+      parameter name: :body, in: :body, required: true, schema: {
+        type: :object,
+        required: %w[security],
+        properties: {
+          security: {
+            type: :object,
+            required: %w[manual_prices],
+            properties: {
+              manual_prices: { type: :boolean }
+            }
+          }
+        }
+      }
+
+      let(:id) { security.id }
+      let(:body) { { security: { manual_prices: true } } }
+
+      response '200', 'security updated' do
+        schema '$ref' => '#/components/schemas/Security'
+
+        run_test!
+      end
+
+      response '401', 'unauthorized' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { nil }
+
+        run_test!
+      end
+
+      response '403', 'insufficient scope or not an admin' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:'X-Api-Key') { api_key_without_read_scope.plain_key }
+
+        run_test!
+      end
+
+      response '404', 'security not found' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:id) { SecureRandom.uuid }
+
+        run_test!
+      end
+
+      response '422', 'invalid manual_prices value' do
+        schema '$ref' => '#/components/schemas/ErrorResponse'
+
+        let(:body) { { security: { manual_prices: 'maybe' } } }
 
         run_test!
       end

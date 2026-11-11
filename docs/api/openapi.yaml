@@ -702,7 +702,14 @@ components:
           - active
           - draft
           - disabled
+          - closed
           - pending_deletion
+        closed_on:
+          type: string
+          format: date
+          nullable: true
+          description: Last day a closed account was open; nothing can be dated after
+            it
         institution_name:
           type: string
           nullable: true
@@ -3399,6 +3406,10 @@ components:
         offline_reason:
           type: string
           nullable: true
+        manual_prices:
+          type: boolean
+          description: True when the security's prices are loaded by hand (offline_reason
+            is manual)
         website_url:
           type: string
           nullable: true
@@ -5183,6 +5194,12 @@ paths:
         description: Include disabled accounts in the response. Defaults to false.
         schema:
           type: boolean
+      - name: include_closed
+        in: query
+        required: false
+        description: Include closed accounts in the response. Defaults to false.
+        schema:
+          type: boolean
       responses:
         '200':
           description: accounts paginated
@@ -5210,6 +5227,12 @@ paths:
         in: query
         required: false
         description: Allow retrieving a disabled account. Defaults to false.
+        schema:
+          type: boolean
+      - name: include_closed
+        in: query
+        required: false
+        description: Allow retrieving a closed account. Defaults to false.
         schema:
           type: boolean
       responses:
@@ -9693,6 +9716,13 @@ paths:
         description: Filter by offline status. When supplied, must be true or false.
         schema:
           type: boolean
+      - name: manual_prices
+        in: query
+        required: false
+        description: Filter to securities whose prices are loaded by hand (true) or
+          not (false).
+        schema:
+          type: boolean
       responses:
         '200':
           description: securities listed
@@ -9758,6 +9788,66 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+    patch:
+      summary: Turn manual prices on or off for a security
+      tags:
+      - Securities
+      description: manual_prices=true marks the security offline with reason "manual"
+        and clears its price provider, so the health check, the daily price import
+        and provider toggles leave it alone and prices are loaded with POST /api/v1/security_prices.
+        false clears the manual reason and leaves the security offline. Prices are
+        shared by every family on the instance, so this needs an admin and a security
+        the family holds or traded.
+      security:
+      - apiKeyAuth: []
+      parameters: []
+      responses:
+        '200':
+          description: security updated
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Security"
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '403':
+          description: insufficient scope or not an admin
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '404':
+          description: security not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '422':
+          description: invalid manual_prices value
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - security
+              properties:
+                security:
+                  type: object
+                  required:
+                  - manual_prices
+                  properties:
+                    manual_prices:
+                      type: boolean
+        required: true
   "/api/v1/security_prices":
     get:
       summary: List security price history referenced by family investment data
@@ -9882,6 +9972,70 @@ paths:
             schema:
               "$ref": "#/components/schemas/SecurityPriceImportRequest"
         required: true
+    delete:
+      summary: Delete a date range of a manually priced security's prices
+      tags:
+      - Security Prices
+      description: Undoes a bad load. Both start_date and end_date are required, so
+        there is no delete-everything call. Only for securities set to manual prices;
+        needs an admin.
+      security:
+      - apiKeyAuth: []
+      parameters:
+      - name: security_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: start_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: end_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: currency
+        in: query
+        required: false
+        description: Only delete prices in this currency
+        schema:
+          type: string
+      responses:
+        '200':
+          description: prices deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - deleted
+                properties:
+                  deleted:
+                    type: integer
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '403':
+          description: insufficient scope or not an admin
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '422':
+          description: missing bound or security is not set to manual prices
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
   "/api/v1/security_prices/{id}":
     parameters:
     - name: id
@@ -10774,6 +10928,13 @@ paths:
           for transactions that still need review'
         schema:
           type: boolean
+      - name: excluded
+        in: query
+        required: false
+        description: 'Filter by whether transactions are excluded from budgets and
+          reports: true for excluded, false for included'
+        schema:
+          type: boolean
       responses:
         '200':
           description: transactions filtered by date range
@@ -10911,6 +11072,10 @@ paths:
                       type: boolean
                       description: Set the review state. Omit to leave a new transaction
                         unreviewed
+                    excluded:
+                      type: boolean
+                      description: Whether the transaction is excluded from budgets
+                        and reports. Omit to leave it unchanged
                     tag_ids:
                       type: array
                       items:
@@ -11070,6 +11235,10 @@ paths:
                     reviewed:
                       type: boolean
                       description: Set the review state. Omit to leave it unchanged
+                    excluded:
+                      type: boolean
+                      description: Whether the transaction is excluded from budgets
+                        and reports. Omit to leave it unchanged
         required: true
     delete:
       summary: Delete a transaction

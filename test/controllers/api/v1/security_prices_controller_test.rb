@@ -411,6 +411,62 @@ class Api::V1::SecurityPricesControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ { "index" => nil, "message" => "prices must be a list" } ], JSON.parse(response.body)["errors"]
   end
 
+  # --- manual prices: bulk upsert and range delete ---
+
+  test "imports closes for a manually priced security" do
+    security = offline_security_held_by(@account)
+    security.enable_manual_prices!
+    Account.any_instance.stubs(:sync_later)
+
+    with_self_hosting do
+      post api_v1_security_prices_url,
+           params: { security_id: security.id, prices: [ close(1.day.ago, "22") ] },
+           headers: api_headers(write_key), as: :json
+    end
+
+    assert_response :success
+    assert_equal [ BigDecimal("22") ], security.prices.pluck(:price)
+    assert security.reload.manual_prices?, "importing prices leaves the security manually priced"
+  end
+
+  test "destroy_range deletes a date range of a manual security so a bad load can be undone" do
+    @security.enable_manual_prices!
+    %w[2018-03-01 2018-03-02 2018-03-03 2018-03-10].each { |d| Security::Price.create!(security: @security, date: d, price: 1, currency: "USD") }
+    Security::Price.create!(security: @security, date: "2018-03-02", price: 2, currency: "EUR")
+
+    delete api_v1_security_prices_url,
+           params: { security_id: @security.id, start_date: "2018-03-02", end_date: "2018-03-03", currency: "USD" },
+           headers: api_headers(write_key_for(@user))
+
+    assert_response :success
+    assert_equal({ "deleted" => 2 }, JSON.parse(response.body))
+    assert_equal %w[2018-03-01 2018-03-10], @security.prices.where(currency: "USD", date: "2018-03-01".."2018-03-31").order(:date).map { |p| p.date.iso8601 }
+    assert @security.prices.exists?(date: "2018-03-02", currency: "EUR"), "other currencies are untouched without a match"
+  end
+
+  test "destroy_range needs both bounds, valid dates, a manual security and an admin" do
+    price = Security::Price.create!(security: @security, date: "2018-03-01", price: 1, currency: "USD")
+
+    delete api_v1_security_prices_url, params: { security_id: @security.id, start_date: "2018-03-01", end_date: "2018-03-01" },
+           headers: api_headers(write_key_for(@user))
+    assert_response :unprocessable_entity, "not manual"
+
+    @security.enable_manual_prices!
+    delete api_v1_security_prices_url, params: { security_id: @security.id, start_date: "2018-03-01" },
+           headers: api_headers(write_key_for(@user))
+    assert_response :unprocessable_entity, "no end date, so no delete-everything call"
+
+    delete api_v1_security_prices_url, params: { security_id: @security.id, start_date: "bad", end_date: "2018-03-01" },
+           headers: api_headers(write_key_for(@user))
+    assert_response :unprocessable_entity
+
+    delete api_v1_security_prices_url, params: { security_id: @security.id, start_date: "2018-03-01", end_date: "2018-03-01" },
+           headers: api_headers(write_key_for(users(:family_member)))
+    assert_response :forbidden
+
+    assert Security::Price.exists?(price.id)
+  end
+
   private
 
     def api_headers(api_key)
@@ -447,5 +503,10 @@ class Api::V1::SecurityPricesControllerTest < ActionDispatch::IntegrationTest
 
     def close(date, price, currency: "AUD")
       { date: date.to_date.iso8601, price: price, currency: currency }
+    end
+
+    def write_key_for(user, name: "Write Key")
+      user.api_keys.active.where.not(id: @api_key.id).destroy_all
+      ApiKey.create!(user: user, name: name, scopes: [ "read_write" ], source: "mobile", display_key: "test_rw_#{SecureRandom.hex(8)}")
     end
 end

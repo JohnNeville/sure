@@ -5,9 +5,10 @@ class Api::V1::SecurityPricesController < Api::V1::BaseController
   include Api::V1::SecurityResourceFiltering
 
   before_action :ensure_read_scope, only: %i[index show]
-  before_action :ensure_write_scope, only: :create
+  before_action :ensure_write_scope, only: %i[create destroy_range]
   before_action :ensure_self_hosted, only: :create
-  before_action :reject_guest_writes!, only: :create
+  before_action :reject_guest_writes!, only: %i[create destroy_range]
+  before_action :ensure_manual_price_manager, only: :destroy_range
   before_action :set_security_price, only: :show
 
   def index
@@ -43,6 +44,25 @@ class Api::V1::SecurityPricesController < Api::V1::BaseController
     render :create
   rescue Security::ManualPriceImport::Invalid => e
     render_json({ error: "validation_failed", message: "Prices were not imported", errors: e.errors }, status: :unprocessable_entity)
+  end
+
+  # Deletes a range of a manually priced security's prices, so a bad load can be
+  # undone. Both bounds are required: there is no "delete everything" call.
+  def destroy_range
+    security = manual_security(params[:security_id])
+    return if performed?
+
+    unless params[:start_date].present? && params[:end_date].present?
+      return render_validation_error("start_date and end_date are both required")
+    end
+
+    prices = security.prices.where("security_prices.date >= ?", parse_date_param(:start_date))
+                            .where("security_prices.date <= ?", parse_date_param(:end_date))
+    prices = prices.where(currency: params[:currency].to_s.strip.upcase) if params[:currency].present?
+
+    render json: { deleted: prices.delete_all }
+  rescue Api::V1::SecurityResourceFiltering::InvalidFilterError => e
+    render_validation_error(e.message)
   end
 
   private
@@ -92,6 +112,38 @@ class Api::V1::SecurityPricesController < Api::V1::BaseController
       end
 
       rows.map { |row| row.is_a?(ActionController::Parameters) ? row.permit(:date, :price, :currency).to_h : row }
+    end
+
+    # Prices are shared by every family on the instance, so writing them is for admins.
+    def ensure_manual_price_manager
+      return if current_resource_owner.admin?
+
+      render json: {
+        error: "forbidden",
+        message: "Only an admin can change a security's prices"
+      }, status: :forbidden
+    end
+
+    # The security must be one the caller's accounts hold or traded, and it must be
+    # set to manual prices. Renders the error and returns nil otherwise.
+    def manual_security(security_id)
+      unless valid_uuid?(security_id.to_s)
+        render_validation_error("security_id must be a valid UUID")
+        return nil
+      end
+
+      security = Security.where(id: scoped_security_ids).find_by(id: security_id)
+      unless security
+        render json: { error: "not_found", message: "Security not found" }, status: :not_found
+        return nil
+      end
+
+      unless security.manual_prices?
+        render_validation_error("Security is not set to manual prices. Set security[manual_prices]=true on the security first.")
+        return nil
+      end
+
+      security
     end
 
     def set_security_price

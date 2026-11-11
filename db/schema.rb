@@ -103,6 +103,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_120000) do
     t.decimal "balance", precision: 19, scale: 4
     t.decimal "cash_balance", precision: 19, scale: 4, default: "0.0"
     t.virtual "classification", type: :string, as: "\nCASE\n    WHEN ((accountable_type)::text = ANY (ARRAY[('Loan'::character varying)::text, ('CreditCard'::character varying)::text, ('OtherLiability'::character varying)::text])) THEN 'liability'::text\n    ELSE 'asset'::text\nEND", stored: true
+    t.date "closed_on"
     t.datetime "created_at", null: false
     t.string "currency"
     t.datetime "disabled_at"
@@ -1985,6 +1986,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_120000) do
     t.datetime "created_at", null: false
     t.string "period", null: false
     t.string "provider_key", null: false
+    t.integer "reported_limit"
     t.datetime "updated_at", null: false
     t.index ["provider_key", "period"], name: "index_provider_request_counts_on_provider_key_and_period", unique: true
   end
@@ -3042,6 +3044,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_120000) do
   end
 
   create_table "vehicles", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.date "avm_last_synced_on"
+    t.string "avm_provider"
     t.datetime "created_at", null: false
     t.jsonb "locked_attributes", default: {}
     t.string "make"
@@ -3051,6 +3055,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_120000) do
     t.string "subtype"
     t.datetime "updated_at", null: false
     t.integer "year"
+    t.index ["avm_last_synced_on"], name: "index_vehicles_on_avm_provider_sync", order: "NULLS FIRST", where: "(avm_provider IS NOT NULL)"
+    t.check_constraint "avm_provider IS NULL OR avm_provider::text = 'cardog'::text", name: "vehicles_avm_provider_check"
   end
 
   create_table "webauthn_credentials", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

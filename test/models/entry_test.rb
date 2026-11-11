@@ -315,4 +315,86 @@ class EntryTest < ActiveSupport::TestCase
     entry.update!(entryable_attributes: { id: entry.entryable_id, exchange_rate: 1.2 })
     assert entry.saved_changes_affect_balances?
   end
+
+  test "reset_exclusion! undoes a manual exclusion when it was the only manual change" do
+    entry = create_transaction(account: accounts(:depository), amount: 10, name: "Reset me")
+    entry.update!(excluded: true)
+    entry.lock_saved_attributes!
+    entry.mark_user_modified!
+
+    assert entry.reset_exclusion!
+
+    entry.reload
+    assert_not entry.excluded?
+    assert_not entry.locked?(:excluded)
+    assert_not entry.user_modified?
+  end
+
+  test "reset_exclusion! keeps the user-modified mark while other manual changes remain" do
+    entry = create_transaction(account: accounts(:depository), amount: 10, name: "Reset me")
+    entry.update!(excluded: true, notes: "Kept")
+    entry.lock_saved_attributes!
+    entry.mark_user_modified!
+
+    entry.reset_exclusion!
+
+    entry.reload
+    assert_not entry.excluded?
+    assert entry.locked?(:notes)
+    assert entry.user_modified?
+  end
+
+  test "reset_exclusion! keeps the mark while the transaction itself has manual changes" do
+    category = categories(:food_and_drink)
+    entry = create_transaction(account: accounts(:depository), amount: 10, name: "Reset me")
+    entry.update!(excluded: true)
+    entry.lock_saved_attributes!
+    entry.mark_user_modified!
+    entry.entryable.update!(category: category)
+    entry.entryable.lock_attr!(:category_id)
+
+    entry.reset_exclusion!
+
+    assert entry.reload.user_modified?
+    assert entry.entryable.locked?(:category_id)
+  end
+
+  test "reset_exclusion! does nothing for an exclusion the user did not set" do
+    entry = create_transaction(account: accounts(:depository), amount: 10, name: "System excluded")
+    entry.update_columns(excluded: true)
+
+    assert_not entry.reset_exclusion!
+    assert entry.reload.excluded?
+  end
+
+  test "a closed account takes nothing dated after its closed date" do
+    account = families(:dylan_family).accounts.create!(name: "Closed", balance: 0, currency: "USD", accountable: Depository.new)
+    closed_on = 10.days.ago.to_date
+    account.close_on!(closed_on)
+
+    after = account.entries.build(date: closed_on + 1.day, name: "Late", amount: 5, currency: "USD", entryable: Transaction.new)
+    assert_not after.valid?
+    assert_match(/after this account was closed on/, after.errors[:date].to_sentence)
+
+    on_the_day = account.entries.build(date: closed_on, name: "Last", amount: 5, currency: "USD", entryable: Transaction.new)
+    assert on_the_day.valid?
+  end
+
+  test "an entry already after a closed date stays editable until its date moves" do
+    account = families(:dylan_family).accounts.create!(name: "Closed later", balance: 0, currency: "USD", accountable: Depository.new)
+    entry = create_transaction(account: account, date: Date.current, amount: 5)
+    account.update_columns(status: "closed", closed_on: 10.days.ago.to_date)
+
+    entry.reload.name = "Renamed"
+    assert entry.valid?
+
+    entry.date = Date.current - 1.day
+    assert_not entry.valid?
+  end
+
+  test "an account that is not closed has no date limit" do
+    entry = create_transaction(account: accounts(:depository), date: Date.current, amount: 5)
+
+    assert entry.valid?
+  end
 end

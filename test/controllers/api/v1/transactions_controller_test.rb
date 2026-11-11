@@ -1771,6 +1771,154 @@ end
     end
   end
 
+  test "should include the excluded flag in transaction responses" do
+    get api_v1_transaction_url(@transaction), headers: api_headers(@api_key)
+
+    assert_response :success
+    assert_equal false, JSON.parse(response.body)["excluded"]
+
+    @transaction.entry.update_columns(excluded: true)
+    get api_v1_transaction_url(@transaction), headers: api_headers(@api_key)
+
+    assert_equal true, JSON.parse(response.body)["excluded"]
+  end
+
+  test "should filter transactions by exclusion from reports" do
+    @family.entries.update_all(excluded: false)
+    @transaction.entry.update_columns(excluded: true)
+
+    get api_v1_transactions_url, params: { excluded: true }, headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal [ @transaction.id ], JSON.parse(response.body)["transactions"].map { |row| row["id"] }
+
+    get api_v1_transactions_url, params: { excluded: false }, headers: api_headers(@api_key)
+    included_ids = JSON.parse(response.body)["transactions"].map { |row| row["id"] }
+    assert_not_includes included_ids, @transaction.id
+    assert_equal @family.transactions.joins(:entry).where(entries: { excluded: false }).count, included_ids.size
+  end
+
+  test "should create a transaction excluded from reports when requested and included by default" do
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: @account.id, name: "Excluded import", amount: 10, date: Date.current, currency: "USD", nature: "expense", excluded: true } },
+         headers: api_headers(@api_key)
+    assert_response :created
+    assert_equal true, JSON.parse(response.body)["excluded"]
+
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: @account.id, name: "Normal import", amount: 10, date: Date.current, currency: "USD", nature: "expense" } },
+         headers: api_headers(@api_key)
+    assert_response :created
+    assert_equal false, JSON.parse(response.body)["excluded"]
+  end
+
+  test "should update the excluded flag only when requested" do
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { excluded: true } },
+        headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal true, JSON.parse(response.body)["excluded"]
+    assert @transaction.entry.reload.excluded?
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { name: "Renamed" } },
+        headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal true, JSON.parse(response.body)["excluded"]
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { excluded: "false" } },
+        headers: api_headers(@api_key)
+    assert_response :success
+    assert_equal false, JSON.parse(response.body)["excluded"]
+    assert_not @transaction.entry.reload.excluded?
+  end
+
+  test "should reject an invalid excluded value" do
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: @account.id, name: "Imported", amount: 10, date: Date.current, currency: "USD", excluded: "maybe" } },
+         headers: api_headers(@api_key)
+    assert_response :unprocessable_entity
+    assert_equal "excluded must be true or false", JSON.parse(response.body)["message"]
+
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { excluded: "maybe" } },
+        headers: api_headers(@api_key)
+    assert_response :unprocessable_entity
+    assert_not @transaction.entry.reload.excluded?
+  end
+
+  test "should not let a read-only key change the excluded flag" do
+    put api_v1_transaction_url(@transaction),
+        params: { transaction: { excluded: true } },
+        headers: api_headers(@read_only_api_key)
+
+    assert_response :forbidden
+    assert_not @transaction.entry.reload.excluded?
+  end
+
+  test "should not include a split parent back in reports through the API" do
+    entry = create_transaction(account: @account, amount: 50, name: "To split")
+    entry.split!([ { name: "Part A", amount: 30 }, { name: "Part B", amount: 20 } ])
+
+    put api_v1_transaction_url(entry.entryable),
+        params: { transaction: { excluded: false } },
+        headers: api_headers(@api_key)
+
+    assert_response :unprocessable_entity
+    assert entry.reload.excluded?
+  end
+
+  # Closed accounts: readable, but nothing may be dated after the closed date
+
+  test "creating a transaction after the account's closed date is rejected, on the date is fine" do
+    account = @family.accounts.create!(name: "Closed account", balance: 0, currency: "USD", accountable: Depository.new, owner: @user)
+    closed_on = 5.days.ago.to_date
+    account.close_on!(closed_on)
+
+    assert_no_difference("Entry.count") do
+      post api_v1_transactions_url,
+           params: { transaction: { account_id: account.id, name: "Too late", amount: 10, date: closed_on + 1.day, nature: "expense" } },
+           headers: api_headers(@api_key), as: :json
+    end
+    assert_response :unprocessable_entity
+    assert_match(/after this account was closed on/, JSON.parse(response.body)["errors"].to_sentence)
+
+    post api_v1_transactions_url,
+         params: { transaction: { account_id: account.id, name: "Last day", amount: 10, date: closed_on, nature: "expense" } },
+         headers: api_headers(@api_key), as: :json
+    assert_response :created
+  end
+
+  test "moving a transaction past its account's closed date is rejected, other edits are fine" do
+    account = @family.accounts.create!(name: "Closed account", balance: 0, currency: "USD", accountable: Depository.new, owner: @user)
+    closed_on = 5.days.ago.to_date
+    entry = account.entries.create!(date: closed_on - 1.day, name: "Old", amount: 5, currency: "USD", entryable: Transaction.new)
+    account.close_on!(closed_on)
+
+    patch api_v1_transaction_url(entry.transaction),
+          params: { transaction: { date: closed_on + 2.days } },
+          headers: api_headers(@api_key), as: :json
+    assert_response :unprocessable_entity
+    assert_equal closed_on - 1.day, entry.reload.date
+
+    patch api_v1_transaction_url(entry.transaction),
+          params: { transaction: { notes: "Still editable" } },
+          headers: api_headers(@api_key), as: :json
+    assert_response :success
+    assert_equal "Still editable", entry.reload.notes
+  end
+
+  test "a closed account's transactions are still returned" do
+    account = @family.accounts.create!(name: "Closed account", balance: 0, currency: "USD", accountable: Depository.new, owner: @user)
+    entry = account.entries.create!(date: 10.days.ago.to_date, name: "Kept history", amount: 5, currency: "USD", entryable: Transaction.new)
+    account.close_on!(5.days.ago.to_date)
+
+    get api_v1_transactions_url, params: { account_id: account.id }, headers: api_headers(@api_key)
+
+    assert_response :success
+    assert_equal [ entry.transaction.id ], JSON.parse(response.body)["transactions"].map { |t| t["id"] }
+  end
+
   private
 
     def foreign_category

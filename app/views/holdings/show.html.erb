@@ -4,6 +4,12 @@
       <div>
         <%= tag.h3 @holding.name, class: "text-2xl font-medium text-primary" %>
         <%= tag.p @holding.ticker, class: "text-sm text-secondary" %>
+        <% if @holding.security.manual_prices? %>
+          <%# Why no provider price shows up: this security is priced by hand. %>
+          <div class="pt-1">
+            <%= render DS::Pill.new(label: t(".manual_prices"), marker: false, tone: :neutral, size: :sm, title: t(".manual_prices_hint")) %>
+          </div>
+        <% end %>
       </div>
       <div class="flex items-center gap-3">
         <% if (logo = @holding.security.display_logo_url).present? %>
