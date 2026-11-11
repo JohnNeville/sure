@@ -72,6 +72,15 @@ export default class extends Controller {
       }
     });
 
+    // Group headings (data-filter-group) follow their rows: hide a group
+    // while none of its rows match, so no empty heading is left behind.
+    this.listTarget.querySelectorAll("[data-filter-group]").forEach((group) => {
+      const anyShown = Array.from(group.querySelectorAll(".filterable-item")).some(
+        (item) => item.style.display !== "none",
+      );
+      group.style.display = anyShown ? "" : "none";
+    });
+
     if (noMatchFound && this.hasEmptyMessageTarget) {
       this.emptyMessageTarget.classList.remove("hidden");
     }

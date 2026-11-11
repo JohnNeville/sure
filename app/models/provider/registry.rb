@@ -3,7 +3,7 @@ class Provider::Registry
 
   Error = Class.new(StandardError)
 
-  CONCEPTS = %i[exchange_rates securities llm property_valuations classification]
+  CONCEPTS = %i[exchange_rates securities llm property_valuations vehicle_valuations classification]
 
   validates :concept, inclusion: { in: CONCEPTS }
 
@@ -203,6 +203,14 @@ class Provider::Registry
 
         Provider::Chimnie.new(api_key)
       end
+
+      def cardog
+        api_key = ENV["CARDOG_API_KEY"].presence || Setting.cardog_api_key # pipelock:ignore
+
+        return nil unless api_key.present?
+
+        Provider::Cardog.new(api_key)
+      end
   end
 
   def initialize(concept)
@@ -246,6 +254,8 @@ class Provider::Registry
         %i[jev]
       when :property_valuations
         %i[rentcast realie chimnie]
+      when :vehicle_valuations
+        %i[cardog]
       else
         %i[plaid_us plaid_eu github openai anthropic]
       end

@@ -10,7 +10,7 @@ class Api::V1::TradesController < Api::V1::BaseController
 
   def index
     family = current_resource_owner.family
-    trades_query = family.trades.visible
+    trades_query = family.trades.reportable
 
     trades_query = apply_filters(trades_query)
     trades_query = trades_query.includes({ entry: :account }, :security, :category).reverse_chronological
@@ -40,7 +40,9 @@ class Api::V1::TradesController < Api::V1::BaseController
       return render_validation_error("Account ID is required", [ "Account ID is required" ])
     end
 
-    account = current_resource_owner.family.accounts.visible.find(trade_params[:account_id])
+    # Closed accounts are found too: a trade up to the closed date is still allowed,
+    # and anything after it is rejected by the entry's own date check.
+    account = current_resource_owner.family.accounts.reportable.find(trade_params[:account_id])
 
     unless account.supports_trades?
       return render_validation_error(
@@ -130,7 +132,7 @@ class Api::V1::TradesController < Api::V1::BaseController
 
     def set_trade
       family = current_resource_owner.family
-      @trade = family.trades.visible.find(params[:id])
+      @trade = family.trades.reportable.find(params[:id])
       @entry = @trade.entry
     rescue ActiveRecord::RecordNotFound
       render json: { error: "not_found", message: "Trade not found" }, status: :not_found

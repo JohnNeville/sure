@@ -87,6 +87,8 @@ RSpec.describe 'API V1 Accounts', type: :request do
                 description: 'Items per page (default: 25, max: 100)'
       parameter name: :include_disabled, in: :query, type: :boolean, required: false,
                 description: 'Include disabled accounts in the response. Defaults to false.'
+      parameter name: :include_closed, in: :query, type: :boolean, required: false,
+                description: 'Include closed accounts in the response. Defaults to false.'
 
       response '200', 'accounts listed' do
         schema '$ref' => '#/components/schemas/AccountCollection'
@@ -115,6 +117,8 @@ RSpec.describe 'API V1 Accounts', type: :request do
       produces 'application/json'
       parameter name: :include_disabled, in: :query, type: :boolean, required: false,
                 description: 'Allow retrieving a disabled account. Defaults to false.'
+      parameter name: :include_closed, in: :query, type: :boolean, required: false,
+                description: 'Allow retrieving a closed account. Defaults to false.'
 
       let(:id) { checking_account.id }
 

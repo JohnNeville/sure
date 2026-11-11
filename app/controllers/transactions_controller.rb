@@ -811,7 +811,7 @@ class TransactionsController < ApplicationController
                 :amount_operator, :active_accounts_only,
                 accounts: [], account_ids: [],
                 categories: [], merchants: [], types: [], tags: [], status: [], ai_status: [],
-                attachment_status: [], reviewed: []
+                attachment_status: [], reviewed: [], exclusion: []
               )
               .to_h
               .compact_blank
@@ -831,6 +831,11 @@ class TransactionsController < ApplicationController
       if cleaned_params[:reviewed]
         cleaned_params[:reviewed] &= Transaction::Search::REVIEW_STATUSES
         cleaned_params.delete(:reviewed) if cleaned_params[:reviewed].empty?
+      end
+
+      if cleaned_params[:exclusion]
+        cleaned_params[:exclusion] &= Transaction::Search::EXCLUSION_STATUSES
+        cleaned_params.delete(:exclusion) if cleaned_params[:exclusion].empty?
       end
 
       cleaned_params

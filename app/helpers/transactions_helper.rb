@@ -11,6 +11,7 @@ module TransactionsHelper
       { key: "type_filter", label: t("transactions.search.filters.type"), icon: "tag" },
       { key: "status_filter", label: t("transactions.search.filters.status"), icon: "clock" },
       { key: "review_filter", label: t("transactions.search.filters.review"), icon: "circle-check" },
+      { key: "exclusion_filter", label: t("transactions.search.filters.exclusion"), icon: "eye-off" },
       { key: "amount_filter", label: t("transactions.search.filters.amount"), icon: "hash" },
       { key: "category_filter", label: t("transactions.search.filters.category"), icon: "shapes" },
       { key: "tag_filter", label: t("transactions.search.filters.tag"), icon: "tags" },
@@ -25,6 +26,22 @@ module TransactionsHelper
   #   it has no translation
   def investment_activity_label_name(label)
     t("transactions.activity_labels.#{label.parameterize(separator: "_")}", default: label)
+  end
+
+  # Accounts for the account filter, grouped by primary type in the order Sure
+  # lists account types everywhere else (cash, investments, ... then
+  # liabilities). Types without an account are left out.
+  #
+  # @param accounts [Enumerable<Account>] the accounts the user can see
+  # @return [Array<Array>] [type, plural display name, accounts] for each type present
+  def grouped_filter_accounts(accounts)
+    by_type = accounts.group_by(&:accountable_type)
+
+    Accountable::TYPES.filter_map do |type|
+      next unless by_type.key?(type)
+
+      [ type, Accountable.from_type(type).display_name, by_type[type] ]
+    end
   end
 
   # @param filter [Hash] one entry from transaction_search_filters

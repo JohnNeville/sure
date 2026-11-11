@@ -18,6 +18,12 @@ class TransferMatchesController < ApplicationController
     Transfer.transaction do
       @transfer.save!
       @transfer.confirm!
+
+      # The user has now matched this pair, so an earlier rejection no longer applies.
+      RejectedTransfer.where(
+        inflow_transaction_id: @transfer.inflow_transaction_id,
+        outflow_transaction_id: @transfer.outflow_transaction_id
+      ).delete_all
     end
 
     @transfer.sync_account_later
@@ -46,14 +52,19 @@ class TransferMatchesController < ApplicationController
     # limited to accounts the user can write to (create would reject the others
     # anyway).
     def writable_candidate_entries
-      counterpart_ids = @entry.transaction.transfer_match_candidates.map do |candidate|
-        @entry.amount.negative? ? candidate.outflow_transaction_id : candidate.inflow_transaction_id
-      end
+      candidates = @entry.transaction.transfer_match_candidates
+      counterpart_of = ->(candidate) { @entry.amount.negative? ? candidate.outflow_transaction_id : candidate.inflow_transaction_id }
+      counterpart_ids = candidates.map(&counterpart_of)
+      rejected_transaction_ids = candidates.select(&:previously_rejected).map(&counterpart_of)
 
       entries_by_transaction_id = Entry
         .where(entryable_type: "Transaction", entryable_id: counterpart_ids, account_id: @accounts.map(&:id))
         .includes(account: [ :account_providers, { logo_attachment: :blob } ])
         .index_by(&:entryable_id)
+
+      # Entries of pairs the user rejected before, which the dialog still offers
+      # but labels.
+      @rejected_entry_ids = entries_by_transaction_id.values_at(*rejected_transaction_ids).compact.map(&:id)
 
       counterpart_ids.filter_map { |id| entries_by_transaction_id[id] }
     end

@@ -8,6 +8,7 @@ class EntrySearch
   attribute :types, array: true
   attribute :status, array: true
   attribute :reviewed, array: true
+  attribute :exclusion, array: true
   attribute :accounts, array: true
   attribute :account_ids, array: true
   attribute :start_date, :string
@@ -81,6 +82,15 @@ class EntrySearch
       scope.where(entryable_type: "Transaction", entryable_id: Transaction.with_review_state(states).select(:id))
     end
 
+    # Whether entries count toward budgets and reports. Both values selected,
+    # or neither, means no filter.
+    def apply_exclusion_filter(scope, states)
+      wanted = Array(states) & Transaction::Search::EXCLUSION_STATUSES
+      return scope if wanted.empty? || wanted.sort == Transaction::Search::EXCLUSION_STATUSES.sort
+
+      scope.where(excluded: wanted == [ "excluded" ])
+    end
+
     def apply_status_filter(scope, statuses)
       return scope unless statuses.present?
       return scope if statuses.uniq.sort == %w[confirmed pending] # Both selected = no filter
@@ -123,6 +133,7 @@ class EntrySearch
     query = self.class.apply_amount_filter(query, amount, amount_operator)
     query = self.class.apply_accounts_filter(query, accounts, account_ids)
     query = self.class.apply_status_filter(query, status)
+    query = self.class.apply_exclusion_filter(query, exclusion)
 
     if transaction_specific_filters?
       # Only Transaction entries have a category/merchant/type/tags, so this

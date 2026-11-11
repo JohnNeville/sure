@@ -7,6 +7,12 @@ en:
         category_label: Category
         category_prompt: Select a category
         date_label: Date
+        excluded_exclude: Exclude from budgeting and reports
+        excluded_include: Include in budgeting and reports
+        excluded_label: Budgeting and reports
+        excluded_prompt: No change
+        excluded_reset: Reset to default (remove my manual setting)
+        excluded_reset_hint: Reset returns the setting to its default and lets rules and syncs manage it again. It only affects transactions where you set it yourself.
         header_title: Edit transactions
         merchant_label: Merchant
         merchant_prompt: Select a merchant
@@ -272,6 +278,7 @@ en:
       edit_tags: "Edit tags"
       edit_merchants: "Edit merchants"
       edit_imports: "Edit imports"
+      rejected_transfers: "Rejected transfer matches"
       new_transaction: "New transaction"
       categorize_button:
         one: "Categorize (1)"
@@ -328,6 +335,7 @@ en:
         ai: AI
         attachment: Attachment
         review: Review
+        exclusion: Budgets and reports
     convert_to_trade:
       title: Convert to Security Trade
       description: Convert this transaction into a trade with security details
@@ -374,6 +382,7 @@ en:
       filters:
         account_filter:
           filter_accounts: Filter accounts
+          select_group: Select all %{group} accounts
         category_filter:
           filter_category: Filter category
         date_filter:
@@ -402,6 +411,8 @@ en:
           attachment_without: Without attachment
           reviewed: Reviewed
           unreviewed: Not reviewed
+          excluded: Excluded from reports
+          included: Included in reports
         attachment_filter:
           with: With attachment
           without: Without attachment
@@ -420,6 +431,9 @@ en:
         review_filter:
           reviewed: Reviewed
           unreviewed: Not reviewed
+        exclusion_filter:
+          excluded: Excluded from reports
+          included: Included in reports
       menu:
         account_filter: Account
         amount_filter: Amount

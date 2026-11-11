@@ -554,6 +554,8 @@ Rails.application.routes.draw do
 
   get :exchange_rate, to: "exchange_rates#show"
 
+  resources :rejected_transfers, only: %i[index destroy]
+
   resources :transfers, only: %i[new create destroy show update] do
     member do
       post :mark_as_recurring
@@ -740,6 +742,9 @@ Rails.application.routes.draw do
       get :logo_options
       get :sparkline
       patch :toggle_active
+      get :confirm_close
+      patch :close
+      patch :reopen
       patch :toggle_exclude_from_reports
       patch :set_default
       patch :remove_default
@@ -786,7 +791,11 @@ Rails.application.routes.draw do
       post :link_valuation
     end
   end
-  resources :vehicles, only: %i[new create edit update]
+  resources :vehicles, only: %i[new create edit update] do
+    member do
+      post :refresh_valuation
+    end
+  end
   resources :credit_cards, only: %i[new create edit update]
   resources :loans, only: %i[new create edit update]
   resources :cryptos, only: %i[new create edit update]
