@@ -387,6 +387,8 @@ class VehiclesControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Honda Accord", @account.reload.name
     assert_equal 21000, @account.opening_anchor_balance
     assert_equal 2.years.ago.to_date, @account.opening_anchor_date
+  end
+
   def stub_cardog(response = successful_avm_response)
     provider = mock
     provider.stubs(:fetch_vehicle_valuation).returns(response)
