@@ -252,6 +252,7 @@
               ) %>
             <% end %>
 
+            <%= render "transactions/review_button", transaction: transaction %>
             <div class="shrink-0 flex items-center justify-end gap-2">
               <%# Protection indicator - shows on hover when entry is protected from sync %>
               <% if entry.protected_from_sync? && !entry.excluded? %>

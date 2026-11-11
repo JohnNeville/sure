@@ -163,6 +163,7 @@ class TransactionsController < ApplicationController
       @entry.sync_account_later
       @entry.lock_saved_attributes!
       @entry.mark_user_modified!
+      @entry.transaction.mark_reviewed!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
 
       respond_with_created_entry(@entry)
@@ -200,6 +201,7 @@ class TransactionsController < ApplicationController
 
       @entry.lock_saved_attributes!
       @entry.mark_user_modified!
+      @entry.transaction.mark_reviewed!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
       @entry.sync_account_later if sync_needed
 
@@ -227,6 +229,11 @@ class TransactionsController < ApplicationController
               dom_id(@entry, :protection),
               partial: "entries/protection_indicator",
               locals: { entry: @entry, unlock_path: unlock_transaction_path(@entry.transaction) }
+            ),
+            turbo_stream.replace(
+              dom_id(@entry.transaction, :review_status),
+              partial: "transactions/review_status",
+              locals: { transaction: @entry.transaction, can_annotate: can_annotate_entry? }
             ),
             (turbo_stream.replace(
               dom_id(@entry, :notes),
@@ -267,6 +274,7 @@ class TransactionsController < ApplicationController
 
     @entry.lock_saved_attributes!
     @entry.mark_user_modified!
+    @entry.transaction.mark_reviewed!
     @entry.transaction.lock_attr!(:tag_ids)
 
     respond_to do |format|
@@ -803,7 +811,7 @@ class TransactionsController < ApplicationController
                 :amount_operator, :active_accounts_only,
                 accounts: [], account_ids: [],
                 categories: [], merchants: [], types: [], tags: [], status: [], ai_status: [],
-                attachment_status: []
+                attachment_status: [], reviewed: []
               )
               .to_h
               .compact_blank
@@ -818,6 +826,11 @@ class TransactionsController < ApplicationController
       if cleaned_params[:attachment_status]
         cleaned_params[:attachment_status] &= Transaction::Search::ATTACHMENT_STATUSES
         cleaned_params.delete(:attachment_status) if cleaned_params[:attachment_status].empty?
+      end
+
+      if cleaned_params[:reviewed]
+        cleaned_params[:reviewed] &= Transaction::Search::REVIEW_STATUSES
+        cleaned_params.delete(:reviewed) if cleaned_params[:reviewed].empty?
       end
 
       cleaned_params

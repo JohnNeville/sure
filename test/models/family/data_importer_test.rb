@@ -5,6 +5,43 @@ class Family::DataImporterTest < ActiveSupport::TestCase
     @family = families(:empty)
   end
 
+  test "imports a transaction's reviewed state" do
+    reviewed_at = Time.utc(2026, 9, 1, 12, 0, 0)
+    ndjson = build_ndjson([
+      { type: "Account", data: { id: "acct-r", name: "Review Account", balance: "100", currency: "USD", accountable_type: "Depository" } },
+      { type: "Transaction", data: { id: "txn-reviewed", account_id: "acct-r", date: "2026-08-01", amount: "-5.00", name: "Reviewed row", currency: "USD", reviewed_at: reviewed_at.iso8601 } },
+      { type: "Transaction", data: { id: "txn-unreviewed", account_id: "acct-r", date: "2026-08-02", amount: "-6.00", name: "Unreviewed row", currency: "USD", reviewed_at: nil } }
+    ])
+
+    Family::DataImporter.new(@family, ndjson).import!
+
+    transactions = @family.transactions.joins(:entry)
+    assert_equal reviewed_at, transactions.find_by!(entries: { name: "Reviewed row" }).reviewed_at
+    assert_nil transactions.find_by!(entries: { name: "Unreviewed row" }).reviewed_at
+  end
+
+  test "transactions from a backup without a review state import as reviewed" do
+    ndjson = build_ndjson([
+      { type: "Account", data: { id: "acct-old", name: "Old Backup Account", balance: "100", currency: "USD", accountable_type: "Depository" } },
+      { type: "Transaction", data: { id: "txn-old", account_id: "acct-old", date: "2024-01-01", amount: "-5.00", name: "Old backup row", currency: "USD" } }
+    ])
+
+    Family::DataImporter.new(@family, ndjson).import!
+
+    assert @family.transactions.joins(:entry).find_by!(entries: { name: "Old backup row" }).reviewed?
+  end
+
+  test "an unreadable reviewed_at imports as unreviewed instead of failing" do
+    ndjson = build_ndjson([
+      { type: "Account", data: { id: "acct-bad", name: "Bad Date Account", balance: "100", currency: "USD", accountable_type: "Depository" } },
+      { type: "Transaction", data: { id: "txn-bad", account_id: "acct-bad", date: "2024-01-01", amount: "-5.00", name: "Bad date row", currency: "USD", reviewed_at: "not a time" } }
+    ])
+
+    Family::DataImporter.new(@family, ndjson).import!
+
+    assert_not @family.transactions.joins(:entry).find_by!(entries: { name: "Bad date row" }).reviewed?
+  end
+
   test "imports accounts with accountable data" do
     ndjson = build_ndjson([
       {

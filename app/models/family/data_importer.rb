@@ -899,6 +899,19 @@ class Family::DataImporter
       ActiveModel::Type::Boolean.new.cast(data[key])
     end
 
+    # Backups made before transactions had a review state carry no reviewed_at.
+    # Their transactions are history the owner already worked through, so they
+    # restore as reviewed (as the migration treated existing ones) instead of
+    # all landing in the review queue. A re-import keeps the state it already
+    # has for those.
+    def imported_reviewed_at(data, existing:)
+      return Time.zone.parse(data["reviewed_at"].to_s) if data.key?("reviewed_at")
+
+      existing || Time.current
+    rescue ArgumentError
+      nil
+    end
+
     def import_transactions(records)
       records.each do |record|
         data = record["data"]
@@ -941,6 +954,7 @@ class Family::DataImporter
         # that system recognise the transaction, kept out of external_id so
         # provider sync can still claim the entry.
         transaction.extra = transaction.extra.merge(data["extra"]) if data["extra"].is_a?(Hash)
+        transaction.reviewed_at = imported_reviewed_at(data, existing: transaction.reviewed_at)
 
         entry ||= Entry.new(entryable: transaction)
         entry.assign_attributes(

@@ -182,7 +182,7 @@ class Family::DataExporterTest < ActiveSupport::TestCase
 
       # Check transactions.csv
       transactions_csv = zip.read("transactions.csv")
-      assert_equal [ "date", "account_name", "amount", "name", "category", "tags", "notes", "currency" ],
+      assert_equal [ "date", "account_name", "amount", "name", "category", "tags", "notes", "currency", "reviewed" ],
                    CSV.parse(transactions_csv, headers: true).headers
 
       # Check trades.csv
@@ -278,6 +278,37 @@ class Family::DataExporterTest < ActiveSupport::TestCase
       assert_includes row["tags"], "\\|"
       assert_equal [ @tag.name, tag2.name ].sort, Import::Row.new(tags: row["tags"]).tags_list.sort
     end
+  end
+
+  test "exports each transaction's reviewed state in the CSV" do
+    reviewed = @account.entries.create!(name: "CSV Reviewed", amount: 5, currency: "USD", date: Date.parse("2024-05-17"), entryable: Transaction.new)
+    reviewed.transaction.mark_reviewed!
+    @account.entries.create!(name: "CSV Unreviewed", amount: 6, currency: "USD", date: Date.parse("2024-05-18"), entryable: Transaction.new)
+
+    Zip::File.open_buffer(@exporter.generate_export) do |zip|
+      rows = CSV.parse(zip.read("transactions.csv"), headers: true)
+
+      assert_equal "true", rows.find { |row| row["name"] == "CSV Reviewed" }["reviewed"]
+      assert_equal "false", rows.find { |row| row["name"] == "CSV Unreviewed" }["reviewed"]
+    end
+  end
+
+  test "the NDJSON backup carries reviewed_at and restores it" do
+    reviewed = @account.entries.create!(name: "Backup Reviewed", amount: 5, currency: "USD", date: Date.parse("2024-05-17"), entryable: Transaction.new)
+    reviewed.transaction.mark_reviewed!
+    @account.entries.create!(name: "Backup Unreviewed", amount: 6, currency: "USD", date: Date.parse("2024-05-18"), entryable: Transaction.new)
+
+    ndjson = nil
+    Zip::File.open_buffer(@exporter.generate_export) { |zip| ndjson = zip.read("all.ndjson") }
+    exported = ndjson.split("\n").map { |line| JSON.parse(line) }.select { |line| line["type"] == "Transaction" }
+    assert_not_nil exported.find { |line| line.dig("data", "name") == "Backup Reviewed" }.dig("data", "reviewed_at")
+    assert_nil exported.find { |line| line.dig("data", "name") == "Backup Unreviewed" }.dig("data", "reviewed_at")
+
+    Family::DataImporter.new(@other_family, ndjson).import!
+
+    restored = @other_family.transactions.joins(:entry)
+    assert restored.find_by!(entries: { name: "Backup Reviewed" }).reviewed?
+    assert_not restored.find_by!(entries: { name: "Backup Unreviewed" }).reviewed?
   end
 
   test "exported CSV files can generate matching import rows" do
