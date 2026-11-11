@@ -187,6 +187,25 @@ RSpec.describe 'API V1 Transactions', type: :request do
               nature: { type: :string, enum: %w[income expense inflow outflow], description: 'Transaction nature (determines sign)' },
               external_id: { type: :string, description: 'Optional external idempotency key scoped to account and source' },
               source: { type: :string, description: 'Optional source namespace for external_id. Requires external_id and defaults to api when external_id is provided' },
+              extra: {
+                type: :object,
+                description: 'Only the import and retail keys are accepted; each is deep-merged into the existing extra and never replaces plaid, simplefin or other keys. import holds what a history backfill knows (suggested keys: original_description, posting_date, bank_transaction_id, reference, check_number, original_memo, original_category, source, source_account). retail holds an order behind the charge (suggested keys: retailer, order_number, order_date, order_url, status, order_total, subtotal, shipping, tax, discounts, payment_last4) plus items, a list of flat objects such as title, quantity, price and asin that is replaced as a whole when sent. Values are strings (numbers are stringified, at most 1000 characters), keys lowercase letters, digits and underscores, at most 30 keys per namespace and 100 items. A null or blank value removes that key and a null namespace removes all of it.',
+                properties: {
+                  import: { type: :object, nullable: true, additionalProperties: { type: :string, nullable: true } },
+                  retail: {
+                    type: :object,
+                    nullable: true,
+                    properties: {
+                      items: {
+                        type: :array,
+                        nullable: true,
+                        items: { type: :object, additionalProperties: { type: :string, nullable: true } }
+                      }
+                    },
+                    additionalProperties: { type: :string, nullable: true }
+                  }
+                }
+              },
               user_modified: { type: :boolean, description: 'Whether provider syncs should preserve user-supplied transaction changes' },
               reviewed: { type: :boolean, description: 'Set the review state. Omit to leave a new transaction unreviewed' },
               tag_ids: { type: :array, items: { type: :string, format: :uuid }, description: 'Array of tag IDs' }
@@ -333,6 +352,25 @@ RSpec.describe 'API V1 Transactions', type: :request do
                 type: :array,
                 items: { type: :string, format: :uuid },
                 description: 'Array of tag IDs to assign. Omit to preserve existing tags; use [] to clear all tags.'
+              },
+              extra: {
+                type: :object,
+                description: 'Only the import and retail keys are accepted; each is deep-merged into the existing extra and never replaces plaid, simplefin or other keys. import holds what a history backfill knows (suggested keys: original_description, posting_date, bank_transaction_id, reference, check_number, original_memo, original_category, source, source_account). retail holds an order behind the charge (suggested keys: retailer, order_number, order_date, order_url, status, order_total, subtotal, shipping, tax, discounts, payment_last4) plus items, a list of flat objects such as title, quantity, price and asin that is replaced as a whole when sent. Values are strings (numbers are stringified, at most 1000 characters), keys lowercase letters, digits and underscores, at most 30 keys per namespace and 100 items. A null or blank value removes that key and a null namespace removes all of it.',
+                properties: {
+                  import: { type: :object, nullable: true, additionalProperties: { type: :string, nullable: true } },
+                  retail: {
+                    type: :object,
+                    nullable: true,
+                    properties: {
+                      items: {
+                        type: :array,
+                        nullable: true,
+                        items: { type: :object, additionalProperties: { type: :string, nullable: true } }
+                      }
+                    },
+                    additionalProperties: { type: :string, nullable: true }
+                  }
+                }
               },
               user_modified: { type: :boolean, description: 'Whether provider syncs should preserve user-supplied transaction changes' },
               reviewed: { type: :boolean, description: 'Set the review state. Omit to leave it unchanged' }

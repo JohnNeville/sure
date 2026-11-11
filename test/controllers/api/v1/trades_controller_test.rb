@@ -1000,6 +1000,154 @@ class Api::V1::TradesControllerTest < ActionDispatch::IntegrationTest
     assert trade_data.key?("notes")
   end
 
+  # extra: trades take the same extra.import clients can write on a transaction
+
+  test "create buy trade stores extra.import and returns it" do
+    security = Security.create!(ticker: "EXTRA1", name: "Extra Security", country_code: "US")
+
+    post "/api/v1/trades",
+      params: { trade: {
+        account_id: @investment_account.id, type: "buy", date: Date.current, qty: 10, price: 100,
+        security_id: security.id,
+        extra: { import: { original_description: "VANGUARD TOT WORLD STK I", source: "Quicken", reference: 4471 } }
+      } },
+      headers: api_headers(read_write_api_key), as: :json
+
+    assert_response :created
+    body = JSON.parse(response.body)
+    assert_equal(
+      { "original_description" => "VANGUARD TOT WORLD STK I", "source" => "Quicken", "reference" => "4471" },
+      body.dig("extra", "import")
+    )
+    assert_equal "Quicken", Trade.find(body["id"]).extra.dig("import", "source")
+  end
+
+  test "create dividend stores extra.import" do
+    post "/api/v1/trades",
+      params: { trade: {
+        account_id: @investment_account.id, type: "dividend", date: Date.current, amount: 25.5,
+        currency: "USD", ticker: "AAPL|XNAS", extra: { import: { source: "Personal Capital" } }
+      } },
+      headers: api_headers(read_write_api_key), as: :json
+
+    assert_response :created
+    assert_equal "Personal Capital", JSON.parse(response.body).dig("extra", "import", "source")
+  end
+
+  test "create deposit stores extra.import on its transaction" do
+    post "/api/v1/trades",
+      params: { trade: {
+        account_id: @investment_account.id, type: "deposit", date: Date.current, amount: 100,
+        currency: "USD", extra: { import: { source: "Chase statement" } }
+      } },
+      headers: api_headers(read_write_api_key), as: :json
+
+    assert_response :created
+    assert_equal "Chase statement", JSON.parse(response.body).dig("extra", "import", "source")
+  end
+
+  test "trade extra rejects retail and other namespaces and creates nothing" do
+    security = Security.create!(ticker: "EXTRA2", name: "Extra Security 2", country_code: "US")
+
+    [ { retail: { retailer: "Amazon" } }, { plaid: { x: 1 } }, "nope" ].each do |bad|
+      assert_no_difference("Entry.count") do
+        post "/api/v1/trades",
+          params: { trade: {
+            account_id: @investment_account.id, type: "buy", date: Date.current, qty: 1, price: 1,
+            security_id: security.id, extra: bad
+          } },
+          headers: api_headers(read_write_api_key), as: :json
+      end
+
+      assert_response :unprocessable_entity, "expected #{bad.inspect} to be rejected"
+    end
+  end
+
+  test "trade extra is refused when creating a transfer" do
+    assert_no_difference("Transfer.count") do
+      post "/api/v1/trades",
+        params: { trade: {
+          account_id: @investment_account.id, type: "withdrawal", date: Date.current, amount: 50,
+          currency: "USD", transfer_account_id: accounts(:depository).id, extra: { import: { source: "x" } }
+        } },
+        headers: api_headers(read_write_api_key), as: :json
+    end
+
+    assert_response :unprocessable_entity
+    assert_match(/transfer/, JSON.parse(response.body)["message"])
+  end
+
+  test "update deep-merges extra.import and leaves other keys alone" do
+    trade = @investment_account.trades.first
+    trade.update!(extra: { "exchange_rate" => "1.2", "import" => { "source" => "Quicken", "reference" => "R-1" } })
+
+    patch api_v1_trade_url(trade.id),
+      params: { trade: { extra: { import: { reference: "R-2", posting_date: "2026-01-03" } } } },
+      headers: api_headers(read_write_api_key), as: :json
+
+    assert_response :success
+    extra = trade.reload.extra
+    assert_equal({ "source" => "Quicken", "reference" => "R-2", "posting_date" => "2026-01-03" }, extra["import"])
+    assert_equal "1.2", extra["exchange_rate"]
+    assert_not trade.locked?(:extra)
+  end
+
+  test "update clears extra.import with null" do
+    trade = @investment_account.trades.first
+    trade.update!(extra: { "import" => { "source" => "Quicken" } })
+
+    patch api_v1_trade_url(trade.id),
+      params: { trade: { extra: { import: nil } } },
+      headers: api_headers(read_write_api_key), as: :json
+
+    assert_response :success
+    assert_not trade.reload.extra.key?("import")
+  end
+
+  test "update rejects bad extra and changes nothing" do
+    trade = @investment_account.trades.first
+    original_qty = trade.qty
+
+    patch api_v1_trade_url(trade.id),
+      params: { trade: { qty: original_qty.abs + 5, extra: { import: { source: { nested: "x" } } } } },
+      headers: api_headers(read_write_api_key), as: :json
+
+    assert_response :unprocessable_entity
+    assert_equal original_qty, trade.reload.qty
+  end
+
+  test "show and index return the trade's extra" do
+    trade = @investment_account.trades.first
+    trade.update!(extra: { "import" => { "source" => "Quicken" } })
+
+    get api_v1_trade_url(trade.id), headers: api_headers(read_write_api_key)
+    assert_response :success
+    assert_equal "Quicken", JSON.parse(response.body).dig("extra", "import", "source")
+
+    get api_v1_trades_url, params: { per_page: 100 }, headers: api_headers(read_write_api_key)
+    row = JSON.parse(response.body)["trades"].find { |t| t["id"] == trade.id }
+    assert_equal "Quicken", row.dig("extra", "import", "source")
+  end
+
+  test "extra is an empty object when a trade has none" do
+    trade = @investment_account.trades.first
+    trade.update!(extra: {})
+
+    get api_v1_trade_url(trade.id), headers: api_headers(read_write_api_key)
+
+    assert_equal({}, JSON.parse(response.body)["extra"])
+  end
+
+  test "read-only key cannot write trade extra" do
+    trade = @investment_account.trades.first
+
+    patch api_v1_trade_url(trade.id),
+      params: { trade: { extra: { import: { source: "x" } } } },
+      headers: api_headers(read_only_api_key), as: :json
+
+    assert_response :forbidden
+  end
+
   private
 
     def read_write_api_key
