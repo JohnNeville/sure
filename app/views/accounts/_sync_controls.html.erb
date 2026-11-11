@@ -4,7 +4,11 @@
     Family::SyncCompleteEvent's broadcast (no Current.family there) — take
     family as an explicit local and use absolute i18n keys, not lazy `t(".")`
     lookups, to behave the same in both contexts. %>
+<% limited_refresh_items = family.plaid_items_with_limited_refresh %>
+
 <div id="accounts-sync-controls" class="flex items-center gap-2 shrink-0">
+  <%# Sync all asks Plaid for a billable refresh on every connection, ignoring
+      their refresh intervals, so confirm first when any of them is limited. %>
   <%= icon(
         family.syncing? ? "loader-circle" : "refresh-cw",
         as_button: true,
@@ -13,7 +17,14 @@
         disabled: family.syncing?,
         class: (family.syncing? ? "animate-spin" : nil),
         "aria-label": t("accounts.index.sync"),
-        frame: :_top
+        frame: :_top,
+        confirm: (if limited_refresh_items.any?
+          CustomConfirm.new(
+            title: t("accounts.index.sync_all_confirm.title"),
+            body: t("accounts.index.sync_all_confirm.body", connections: limited_refresh_items.map(&:name).to_sentence),
+            btn_text: t("accounts.index.sync_all_confirm.btn_text")
+          )
+        end)
       ) %>
 
   <% if (family_sync = family.syncs.visible.first) %>

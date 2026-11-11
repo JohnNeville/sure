@@ -14,6 +14,15 @@ module Family::PlaidConnectable
     plaid(:eu).present? && self.eu?
   end
 
+  # Connections whose billable transactions refresh is rate limited. Syncing
+  # everything from the accounts page requests a refresh for each of them
+  # regardless, so the UI warns first.
+  def plaid_items_with_limited_refresh
+    plaid_items.syncable
+               .where.not(refresh_interval: "always")
+               .select { |item| item.supports_product?("transactions") }
+  end
+
   # `institution_id` is optional because it only became available to callers once
   # Link's institution metadata was threaded through. Until then the column was
   # populated during the first sync, by PlaidItem#upsert_plaid_institution_snapshot!.
