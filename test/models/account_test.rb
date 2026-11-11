@@ -1497,6 +1497,7 @@ class AccountTest < ActiveSupport::TestCase
     assert_no_enqueued_jobs(only: AccountLogoFetchJob) do
       @account.update!(name: "Renamed")
       @account.update!(institution_domain: nil)
+    end
   end
 
   test "closing an account keeps it out of live lists but in reportable and historical ones" do
