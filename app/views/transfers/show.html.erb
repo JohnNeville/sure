@@ -30,6 +30,10 @@
             </dd>
           </dl>
           <dl class="flex items-center gap-2 justify-between">
+            <dt class="text-secondary"><%= t(".transaction_name") %></dt>
+            <dd class="font-medium text-right min-w-0 break-words"><%= @transfer.outflow_transaction.entry.name %></dd>
+          </dl>
+          <dl class="flex items-center gap-2 justify-between">
             <dt class="text-secondary"><%= t(".date") %></dt>
             <dd class="font-medium"><%= l(@transfer.outflow_transaction.entry.date, format: :long) %></dd>
           </dl>
@@ -58,6 +62,10 @@
               <%= render "accounts/logo", account: @transfer.to_account, size: "sm" %>
               <%= link_to @transfer.to_account.name, account_path(@transfer.to_account), data: { turbo_frame: "_top" } %>
             </dd>
+          </dl>
+          <dl class="flex items-center gap-2 justify-between">
+            <dt class="text-secondary"><%= t(".transaction_name") %></dt>
+            <dd class="font-medium text-right min-w-0 break-words"><%= @transfer.inflow_transaction.entry.name %></dd>
           </dl>
           <dl class="flex items-center gap-2 justify-between">
             <dt class="text-secondary"><%= t(".date") %></dt>
