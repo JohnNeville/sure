@@ -1086,7 +1086,7 @@ RSpec.configure do |config|
               extra: {
                 type: :object,
                 additionalProperties: true,
-                description: 'Provider and import details. Keys are provider-defined (for example plaid or simplefin, written by bank sync) plus import and retail, the namespaces API clients can write.'
+                description: 'Provider and import details. Keys are provider-defined (for example plaid or simplefin, written by bank sync) plus import and retail, the namespaces API clients can write. Omitted unless the caller owns the account or has a full_control or read_write share.'
               },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },
@@ -1791,7 +1791,7 @@ RSpec.configure do |config|
               extra: {
                 type: :object,
                 additionalProperties: true,
-                description: 'Provider and import details. Keys are provider-defined, plus import, the namespace API clients can write.'
+                description: 'Provider and import details. Keys are provider-defined, plus import, the namespace API clients can write. Omitted unless the caller owns the account or has a full_control or read_write share.'
               },
               account: { '$ref' => '#/components/schemas/Account' },
               security: {

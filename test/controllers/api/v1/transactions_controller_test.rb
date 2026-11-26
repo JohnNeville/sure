@@ -1573,8 +1573,20 @@ end
     assert_equal [ tag.id ], transaction.tag_ids
   end
 
-  test "a read_write member cannot write extra" do
+  test "a read_write member can write extra and read it back" do
     key, entry = shared_member_key_and_entry("read_write")
+
+    patch api_v1_transaction_url(entry.transaction),
+          params: { transaction: { extra: { import: { source: "Quicken" } } } },
+          headers: api_headers(key)
+
+    assert_response :success
+    assert_equal "Quicken", entry.transaction.reload.extra.dig("import", "source")
+    assert_equal "Quicken", JSON.parse(response.body).dig("extra", "import", "source")
+  end
+
+  test "a read_only member cannot write extra" do
+    key, entry = shared_member_key_and_entry("read_only")
 
     patch api_v1_transaction_url(entry.transaction),
           params: { transaction: { extra: { import: { source: "Quicken" } } } },
@@ -1582,6 +1594,24 @@ end
 
     assert_response :forbidden
     assert_nil entry.transaction.reload.extra&.dig("import")
+  end
+
+  test "extra is returned only to members who can annotate the account" do
+    { "full_control" => true, "read_write" => true, "read_only" => false }.each do |permission, visible|
+      key, entry = shared_member_key_and_entry(permission)
+      entry.transaction.update!(extra: { "plaid" => { "account_number" => "U1234567" } })
+
+      get api_v1_transaction_url(entry.transaction), headers: api_headers(key)
+      assert_response :success
+      assert_equal visible, JSON.parse(response.body).key?("extra"), "show as #{permission}"
+      assert_equal visible, response.body.include?("U1234567"), "show as #{permission}"
+
+      get api_v1_transactions_url, params: { account_id: entry.account_id }, headers: api_headers(key)
+      assert_response :success
+      row = JSON.parse(response.body)["transactions"].find { |r| r["id"] == entry.transaction.id }
+      assert_equal visible, row.key?("extra"), "index as #{permission}"
+      assert_equal visible, response.body.include?("U1234567"), "index as #{permission}"
+    end
   end
 
   test "a read_write member cannot change description or user_modified" do

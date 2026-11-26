@@ -1694,6 +1694,28 @@ class Api::V1::TradesControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Quicken", row.dig("extra", "import", "source")
   end
 
+  test "trade extra is returned only to members who can annotate the account" do
+    trade = @investment_account.trades.first
+    trade.update!(extra: { "import" => { "reference" => "U1234567" } })
+    member = users(:family_member)
+    member.api_keys.active.destroy_all
+    key = ApiKey.create!(user: member, name: "Member", key: ApiKey.generate_secure_key, scopes: %w[read_write], source: "web")
+    Redis.new.del("api_rate_limit:#{key.id}")
+    share = @investment_account.account_shares.find_or_initialize_by(user: member)
+
+    { "full_control" => true, "read_write" => true, "read_only" => false }.each do |permission, visible|
+      share.update!(permission: permission)
+
+      get api_v1_trade_url(trade.id), headers: api_headers(key)
+      assert_response :success
+      assert_equal visible, JSON.parse(response.body).key?("extra"), "show as #{permission}"
+
+      get api_v1_trades_url, params: { account_id: @investment_account.id, per_page: 100 }, headers: api_headers(key)
+      row = JSON.parse(response.body)["trades"].find { |r| r["id"] == trade.id }
+      assert_equal visible, row.key?("extra"), "index as #{permission}"
+    end
+  end
+
   test "extra is an empty object when a trade has none" do
     trade = @investment_account.trades.first
     trade.update!(extra: {})

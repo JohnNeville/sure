@@ -256,6 +256,16 @@ class Api::V1::BaseController < ApplicationController
       false
     end
 
+    # Whether the credentials' owner may annotate the account: the bar for seeing
+    # a record's raw `extra`, which holds provider payloads (account numbers and
+    # the like). A read-only share can read the record but not that. Loaded once
+    # per request, so list endpoints add one query rather than one per row.
+    def api_annotatable_account?(account_id)
+      @api_annotatable_account_ids ||= Account.annotatable_by(current_resource_owner).pluck(:id).to_set
+      @api_annotatable_account_ids.include?(account_id)
+    end
+    helper_method :api_annotatable_account?
+
     # Consistent JSON response method
     def render_json(data, status: :ok)
       render json: data, status: status

@@ -130,9 +130,12 @@ else
   json.transfer nil
 end
 
-# Provider and import details (plaid, simplefin, import, ...). Keys are
-# provider-defined; "import" is the namespace API clients may write.
-json.extra transaction.extra.presence || {}
+# Provider and import details (plaid, simplefin, import, retail, ...). Keys are
+# provider-defined; "import" and "retail" are the namespaces API clients may
+# write. Omitted unless the caller may annotate the account.
+if api_annotatable_account?(transaction.entry.account_id)
+  json.extra transaction.extra.presence || {}
+end
 
 # Additional metadata
 json.created_at transaction.created_at.iso8601
