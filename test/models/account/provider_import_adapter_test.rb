@@ -2924,6 +2924,34 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
       "a flag that does not mark the transaction pending is not cleared"
   end
 
+  test "find_duplicate_transaction never returns a split child" do
+    parent = @account.entries.create!(
+      date: Date.current, amount: 100, name: "Costco", currency: "USD", entryable: Transaction.new(kind: "standard")
+    )
+    parent.split!([ { name: "Groceries", amount: 60 }, { name: "Household", amount: 40 } ])
+
+    assert_nil @adapter.find_duplicate_transaction(date: Date.current, amount: 60, currency: "USD")
+    assert_nil @adapter.find_duplicate_transaction(date: Date.current, amount: 40, currency: "USD")
+    assert_nil @adapter.find_duplicate_transaction(date: Date.current, amount: 60, currency: "USD", date_window: 3, include_provider_entries: true)
+  end
+
+  test "find_duplicate_transaction still returns an ordinary entry" do
+    entry = @account.entries.create!(
+      date: Date.current, amount: 60, name: "Costco", currency: "USD", entryable: Transaction.new(kind: "standard")
+    )
+
+    assert_equal entry, @adapter.find_duplicate_transaction(date: Date.current, amount: 60, currency: "USD")
+  end
+
+  test "find_duplicate_transaction still matches a split parent that has no external id" do
+    parent = @account.entries.create!(
+      date: Date.current, amount: 100, name: "Costco", currency: "USD", entryable: Transaction.new(kind: "standard")
+    )
+    parent.split!([ { name: "Groceries", amount: 60 }, { name: "Household", amount: 40 } ])
+
+    assert_equal parent, @adapter.find_duplicate_transaction(date: Date.current, amount: 100, currency: "USD")
+  end
+
   private
 
     def capture_sql_queries
