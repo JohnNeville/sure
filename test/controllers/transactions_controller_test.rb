@@ -2787,7 +2787,7 @@ end
   end
 
   test "the account filter lists accounts under a group checkbox for each account type" do
-    get transactions_url
+    get filters_transactions_url
 
     assert_response :success
     doc = Nokogiri::HTML(response.body)
@@ -2805,7 +2805,7 @@ end
   end
 
   test "the account filter keeps the checked accounts from the query" do
-    get transactions_url(q: { accounts: [ accounts(:depository).name ] })
+    get filters_transactions_url(q: { accounts: [ accounts(:depository).name ] })
 
     assert_response :success
     assert_select "input[data-account-filter-groups-target='account'][value=?][checked]", accounts(:depository).name
