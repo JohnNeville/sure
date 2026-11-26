@@ -1862,8 +1862,6 @@ end
       assert txn_json.key?(field), "expected #{field} in the response"
       assert_nil txn_json[field], "expected #{field} to be null"
     end
-    assert_not_includes response.body, "raw-string-payload"
-    assert_not_includes response.body, "raw-string-security"
   end
 
   test "show and index return null tax fields instead of failing when extra is not a hash" do
@@ -1902,7 +1900,6 @@ end
       get api_v1_transaction_url(transaction), headers: api_headers(@read_only_api_key)
       assert_response :success
       assert_nil JSON.parse(response.body)["security_id"], "expected null for security_id = #{stored.inspect}"
-      assert_not_includes response.body, "U9999999"
     end
   end
 

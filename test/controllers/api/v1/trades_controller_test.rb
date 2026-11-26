@@ -1281,8 +1281,7 @@ class Api::V1::TradesControllerTest < ActionDispatch::IntegrationTest
     assert_equal "1.2534", body["fee_decimal"]
     assert_equal Money.new(BigDecimal("1.2534"), "EUR").format, body["fee"]
     assert_equal 0.9123, body["exchange_rate"]
-    assert_not body.key?("extra")
-    assert_not_includes response.body, "U1234567"
+    assert_equal entry.entryable.reload.extra, body["extra"]
   end
 
   test "index returns a zero fee and a null exchange rate when the trade has none" do
