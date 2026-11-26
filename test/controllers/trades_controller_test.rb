@@ -614,6 +614,33 @@ class TradesControllerTest < ActionDispatch::IntegrationTest
     assert_equal "open", pledge.reload.status
   end
 
+  # What an API client writes to extra.import reaches the person looking at the
+  # trade. The exchange rate Sure keeps in extra for its own use must not.
+  test "the drawer shows the import details written through the API" do
+    @entry.trade.update!(extra: {
+      "exchange_rate" => "1.2",
+      "import" => { "original_description" => "VANGUARD TOT WORLD STK I", "source" => "Quicken", "reference" => "4471" }
+    })
+
+    get trade_url(@entry), headers: { "Turbo-Frame" => "drawer" }
+
+    assert_response :success
+    assert_match "Additional details", response.body
+    [ "Original description", "VANGUARD TOT WORLD STK I", "Imported from", "Quicken", "Reference", "4471" ].each do |text|
+      assert_includes response.body, ERB::Util.html_escape(text), "expected the drawer to show #{text.inspect}"
+    end
+    assert_no_match "exchange_rate", response.body
+  end
+
+  test "the drawer has no Additional details section when extra holds only internals" do
+    @entry.trade.update!(extra: { "exchange_rate" => "1.2" })
+
+    get trade_url(@entry), headers: { "Turbo-Frame" => "drawer" }
+
+    assert_response :success
+    assert_no_match "Additional details", response.body
+  end
+
   private
     def lot_choice_account(method: "average")
       account = accounts(:investment)

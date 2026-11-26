@@ -51,5 +51,11 @@ else
   json.category nil
 end
 
+# Provider and import details; "import" is the namespace API clients can write.
+# Omitted unless the caller may annotate the account.
+if api_annotatable_account?(trade.entry.account_id)
+  json.extra trade.extra.presence || {}
+end
+
 json.created_at trade.created_at.iso8601
 json.updated_at trade.updated_at.iso8601

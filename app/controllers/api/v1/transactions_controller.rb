@@ -13,6 +13,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
   before_action :set_transaction, only: [ :show, :update, :destroy ]
   before_action :ensure_write_permission, only: [ :update, :destroy ]
   before_action :validate_reviewed_param, only: [ :create, :update ]
+  before_action :validate_import_extra, only: [ :create, :update ]
 
   def index
     family = current_resource_owner.family
@@ -117,6 +118,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
       @entry.mark_user_modified! if user_modified_requested?
       apply_requested_review_state(@entry.transaction)
+      apply_import_extra(@entry.transaction)
       @entry.sync_account_later
       @entry.apply_immediate_rules_later
 
@@ -187,6 +189,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
         @entry.lock_saved_attributes!
         @entry.mark_user_modified! if user_modified_requested?
         apply_requested_review_state(@entry.transaction)
+        apply_import_extra(@entry.transaction)
 
         @transaction = @entry.transaction
         updated = true
@@ -249,7 +252,8 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     # Reading needs access to the account. Deleting, or changing anything
     # outside the annotate fields, needs the write tier (AccountPolicy#update?);
     # a member in the annotate tier may only change the AccountShare annotate
-    # fields (notes, category, merchant, tags), the same split the web UI
+    # fields (notes, category, merchant, tags) and the client namespaces of
+    # extra, which never touch provider data. Otherwise the same split the web UI
     # applies in TransactionsController#permitted_entry_params. A refused request is a 403,
     # not a silently trimmed update, so the client learns nothing was applied.
     def ensure_write_permission
@@ -418,6 +422,35 @@ class Api::V1::TransactionsController < Api::V1::BaseController
 
     def account_id_param
       params.dig(:transaction, :account_id).presence
+    end
+
+    # Clients may write only to extra["import"]; the rest of extra belongs to the
+    # bank-sync providers and to Sure itself. Checked up front so a bad request
+    # changes nothing, and applied after lock_saved_attributes! so the column is
+    # not locked against sync the way a user edit would be.
+    def extra_provided?
+      params[:transaction].respond_to?(:key?) && params[:transaction].key?(:extra)
+    end
+
+    def validate_import_extra
+      return unless extra_provided?
+
+      import_extra = Transaction::ClientExtra.new(params.dig(:transaction, :extra))
+      import_extra.apply_to(@entry&.transaction&.extra) if import_extra.valid?
+      return if import_extra.valid?
+
+      render json: {
+        error: "validation_failed",
+        message: import_extra.errors.first,
+        errors: import_extra.errors
+      }, status: :unprocessable_entity
+    end
+
+    def apply_import_extra(transaction)
+      return unless extra_provided?
+
+      merged = Transaction::ClientExtra.new(params.dig(:transaction, :extra)).apply_to(transaction.extra)
+      transaction.update!(extra: merged) unless merged == transaction.extra
     end
 
     def entry_params_for_create

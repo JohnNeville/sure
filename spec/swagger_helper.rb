@@ -1085,6 +1085,11 @@ RSpec.configure do |config|
                 type: :string,
                 description: 'Currency of the amount, always the same as currency on a transaction.'
               },
+              extra: {
+                type: :object,
+                additionalProperties: true,
+                description: 'Provider and import details. Keys are provider-defined (for example plaid or simplefin, written by bank sync) plus import and retail, the namespaces API clients can write. Omitted unless the caller owns the account or has a full_control or read_write share.'
+              },
               account: { '$ref' => '#/components/schemas/Account' },
               category: { '$ref' => '#/components/schemas/Category', nullable: true },
               merchant: { '$ref' => '#/components/schemas/Merchant', nullable: true },
@@ -1785,6 +1790,11 @@ RSpec.configure do |config|
                 description: "Currency of the trade's amount (the entry's), which the cash balance converts from with exchange_rate. It can differ from currency, the trade's own."
               },
               lot_source_trade_id: { type: :string, format: :uuid, nullable: true, description: 'For a sale, the trade whose lot it names to sell from first. It applies only while the account sells by FIFO; an account that sells by average keeps it but sells from the pooled average.' },
+              extra: {
+                type: :object,
+                additionalProperties: true,
+                description: 'Provider and import details. Keys are provider-defined, plus import, the namespace API clients can write. Omitted unless the caller owns the account or has a full_control or read_write share.'
+              },
               account: { '$ref' => '#/components/schemas/Account' },
               security: {
                 type: :object,
