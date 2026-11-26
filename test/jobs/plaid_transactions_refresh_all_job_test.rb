@@ -4,9 +4,17 @@ class PlaidTransactionsRefreshAllJobTest < ActiveJob::TestCase
   test "requests transaction refreshes for syncable Plaid items" do
     family = families(:dylan_family)
 
-    PlaidItem.any_instance.expects(:request_transactions_refresh_later).once
+    PlaidItem.any_instance.expects(:request_transactions_refresh_later).with(force: false).once
 
     PlaidTransactionsRefreshAllJob.perform_now(family, source: "TestSync")
+  end
+
+  test "passes force through to each item" do
+    family = families(:dylan_family)
+
+    PlaidItem.any_instance.expects(:request_transactions_refresh_later).with(force: true).once
+
+    PlaidTransactionsRefreshAllJob.perform_now(family, source: "TestSync", force: true)
   end
 
   test "contains per-item refresh failures and records a sanitized diagnostic" do
