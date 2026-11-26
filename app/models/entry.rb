@@ -1070,6 +1070,8 @@ class Entry < ApplicationRecord
             when :unreviewed then unreviewed_entries << entry
             when :when_edited then reviewed_entries << entry if changed
             end
+            # Setting the review state alone still counts as an updated row.
+            updated_count += 1 if !changed && review_mode.in?(%i[reviewed unreviewed])
           end
         end
 

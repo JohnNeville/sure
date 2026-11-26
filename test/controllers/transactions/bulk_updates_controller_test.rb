@@ -875,4 +875,10 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
 
     assert entry.transaction.reload.reviewed?
   end
+
+  test "bulk update counts rows whose review state alone was set" do
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entries(:transaction).id ], reviewed: "true" } }
+
+    assert_equal "1 transactions updated", flash[:notice]
+  end
 end
