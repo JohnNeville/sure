@@ -1,0 +1,63 @@
+<%# locals: (account:, provider_key:) %>
+
+<% provider_name = t("vehicles.avm_providers.#{provider_key}") %>
+
+<%= render DS::Dialog.new do |dialog| %>
+  <% dialog.with_header(title: t("vehicles.new.avm_title", provider: provider_name)) %>
+  <% dialog.with_body do %>
+    <%= styled_form_with model: account, url: vehicles_path(return_to: params[:return_to]), scope: :account do |form| %>
+      <div class="flex flex-col gap-2 min-h-80">
+        <%= render "properties/form_alert", notice: nil, error: @error_message %>
+
+        <p class="text-sm text-secondary"><%= t("vehicles.new.avm_description", provider: provider_name) %></p>
+
+        <%= hidden_field_tag :avm_provider, provider_key %>
+        <%= form.hidden_field :accountable_type, value: "Vehicle" %>
+
+        <%= form.text_field :name,
+                            label: t("accounts.form.name_label"),
+                            placeholder: t("accounts.form.name_placeholder"),
+                            required: true %>
+
+        <%= form.fields_for :accountable do |vehicle_form| %>
+          <div class="flex items-center gap-2">
+            <%= vehicle_form.text_field :make,
+                                        label: t("vehicles.form.make"),
+                                        placeholder: t("vehicles.form.make_placeholder"),
+                                        required: true %>
+            <%= vehicle_form.text_field :model,
+                                        label: t("vehicles.form.model"),
+                                        placeholder: t("vehicles.form.model_placeholder"),
+                                        required: true %>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <%= vehicle_form.number_field :year,
+                                          label: t("vehicles.form.year"),
+                                          placeholder: t("vehicles.form.year_placeholder"),
+                                          min: 1900,
+                                          max: Time.current.year + 1,
+                                          required: true %>
+            <%= vehicle_form.number_field :mileage_value,
+                                          label: t("vehicles.form.mileage"),
+                                          placeholder: t("vehicles.form.mileage_placeholder"),
+                                          min: 0 %>
+            <%= vehicle_form.select :mileage_unit,
+                                    [[t("vehicles.form.mileage_unit_miles"), "mi"], [t("vehicles.form.mileage_unit_kilometers"), "km"]],
+                                    { label: t("vehicles.form.mileage_unit") } %>
+          </div>
+        <% end %>
+
+        <p class="text-sm text-secondary"><%= t("vehicles.new.avm_us_only", provider: provider_name) %></p>
+      </div>
+
+      <div class="flex justify-end mt-4">
+        <%= render DS::Button.new(
+          text: t("vehicles.new.avm_submit"),
+          variant: "primary",
+          type: :submit,
+        ) %>
+      </div>
+    <% end %>
+  <% end %>
+<% end %>

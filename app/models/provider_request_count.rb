@@ -11,19 +11,35 @@ class ProviderRequestCount < ApplicationRecord
       Date.current.strftime("%Y-%m")
     end
 
-    # Atomically increments the counter and returns the new count.
-    def increment!(provider_key, period: current_period)
+    # Atomically increments the counter by `by` (default 1) and returns the
+    # new count. Credit-metered providers pass the cost of the call.
+    def increment!(provider_key, by: 1, period: current_period)
+      by = Integer(by)
       result = upsert(
-        { provider_key: provider_key, period: period, count: 1 },
+        { provider_key: provider_key, period: period, count: by },
         unique_by: %i[provider_key period],
-        on_duplicate: Arel.sql("count = provider_request_counts.count + 1, updated_at = CURRENT_TIMESTAMP"),
+        on_duplicate: Arel.sql(sanitize_sql_array([ "count = provider_request_counts.count + ?, updated_at = CURRENT_TIMESTAMP", by ])),
         returning: %w[count]
       )
       result.rows.first.first.to_i
     end
 
-    def decrement!(provider_key, period: current_period)
-      where(provider_key: provider_key, period: period).update_all("count = GREATEST(count - 1, 0)")
+    def decrement!(provider_key, by: 1, period: current_period)
+      where(provider_key: provider_key, period: period).update_all([ "count = GREATEST(count - ?, 0)", Integer(by) ])
+    end
+
+    # Overwrites the counter with a figure the provider itself reported, so
+    # usage from outside Sure (other apps or scripts on the same key) is
+    # included. `limit` is the provider's reported monthly allowance, kept
+    # when the provider doesn't send one.
+    def set!(provider_key, count, limit: nil, period: current_period)
+      values = { provider_key: provider_key, period: period, count: Integer(count) }
+      values[:reported_limit] = Integer(limit) if limit
+      upsert(values, unique_by: %i[provider_key period])
+    end
+
+    def reported_limit_for(provider_key, period: current_period)
+      where(provider_key: provider_key, period: period).pick(:reported_limit)
     end
 
     def count_for(provider_key, period: current_period)
