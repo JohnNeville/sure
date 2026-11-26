@@ -262,6 +262,9 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     # transaction_params are ignored on update for every role (account_id
     # included), so they cannot widen what an annotate-tier member changes.
     def annotate_only_update?
+      # extra is not an annotation: writing it needs write access to the account.
+      return false if extra_provided?
+
       transaction_params.except(
         *AccountShare::ANNOTATE_ENTRY_ATTRIBUTES, *AccountShare::ANNOTATE_TRANSACTION_ATTRIBUTES
       ).empty?

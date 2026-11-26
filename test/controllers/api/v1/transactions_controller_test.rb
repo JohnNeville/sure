@@ -1573,6 +1573,17 @@ end
     assert_equal [ tag.id ], transaction.tag_ids
   end
 
+  test "a read_write member cannot write extra" do
+    key, entry = shared_member_key_and_entry("read_write")
+
+    patch api_v1_transaction_url(entry.transaction),
+          params: { transaction: { extra: { import: { source: "Quicken" } } } },
+          headers: api_headers(key)
+
+    assert_response :forbidden
+    assert_nil entry.transaction.reload.extra&.dig("import")
+  end
+
   test "a read_write member cannot change description or user_modified" do
     key, entry = shared_member_key_and_entry("read_write")
 
