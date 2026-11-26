@@ -192,7 +192,8 @@ class TransactionsController < ApplicationController
 
       @entry.lock_saved_attributes!
       @entry.mark_user_modified!
-      @entry.transaction.mark_reviewed!
+      # An account shared read-only accepts the request but changes nothing.
+      @entry.transaction.mark_reviewed! if can_annotate_entry?
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
       @entry.sync_account_later if sync_needed
       @entry.apply_immediate_rules_later(changed_from: rule_input)

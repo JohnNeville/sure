@@ -469,7 +469,7 @@ class Entry < ApplicationRecord
   # column rules start reading later can't be missed.
   RULE_INPUT_IGNORED_COLUMNS = %w[
     updated_at locked_attributes user_modified
-    import_locked reconciled_at reconciled_by_statement_id
+    import_locked reconciled_at reconciled_by_statement_id reviewed_at
   ].freeze
 
   # What rules can read from this transaction. Taken before an edit and passed

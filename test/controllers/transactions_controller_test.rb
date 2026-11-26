@@ -2915,6 +2915,22 @@ end
     assert_select "##{ActionView::RecordIdentifier.dom_id(entry.transaction, :review)} button[aria-pressed=true]"
   end
 
+  test "an update from a read-only share does not mark a transaction reviewed" do
+    entry = entries(:transfer_in) # credit card, shared read_only with family_member
+    sign_in users(:family_member)
+
+    patch transaction_url(entry), params: { entry: { name: "Renamed" } }
+
+    assert_not entry.transaction.reload.reviewed?
+  end
+
+  test "the lazy filter menu keeps the checked review state" do
+    get filters_transactions_url(q: { reviewed: [ "unreviewed" ] })
+
+    assert_response :success
+    assert_select "input[name='q[reviewed][]'][value='unreviewed'][checked]"
+  end
+
   private
     def create_immediate_rule
       @user.family.rules.create!(
