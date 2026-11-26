@@ -1,4 +1,4 @@
-<%# locals: (form:, entry:, candidates:, accounts:) %>
+<%# locals: (form:, entry:, candidates:, accounts:, rejected_entry_ids: []) %>
 
 <% account_items = accounts.map { |account| { value: account.id, label: account.name, object: account } } %>
 
@@ -17,14 +17,21 @@
               data: { action: "change->transfer-match#update" } %>
 
     <div data-transfer-match-target="existingSelect">
+      <%# Pairs rejected before are still offered, but last and labelled, so the
+          default choice stays a fresh candidate. %>
+      <% fresh, rejected = candidates.partition { |candidate| rejected_entry_ids.exclude?(candidate.id) } %>
       <%= render DS::Select.new(
             form: form,
             method: :matched_entry_id,
-            items: candidates.map { |candidate| { value: candidate.id, label: entry_name_detailed(candidate), object: candidate.account } },
-            selected: candidates.first.id,
+            items: fresh.map { |candidate| { value: candidate.id, label: entry_name_detailed(candidate), object: candidate.account } } +
+                   rejected.map { |candidate| { value: candidate.id, label: t(".previously_rejected", name: entry_name_detailed(candidate)), object: candidate.account } },
+            selected: (fresh + rejected).first.id,
             variant: :logo,
             label: t(".matching_transaction")
           ) %>
+      <% if rejected.any? %>
+        <p class="text-xs text-secondary"><%= t(".previously_rejected_hint") %></p>
+      <% end %>
     </div>
 
     <div data-transfer-match-target="newSelect" class="hidden">
