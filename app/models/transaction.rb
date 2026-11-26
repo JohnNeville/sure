@@ -47,6 +47,39 @@ class Transaction < ApplicationRecord
     super(Array(tags).uniq)
   end
 
+  REVIEW_STATUSES = %w[reviewed unreviewed].freeze
+
+  scope :reviewed, -> { where.not(reviewed_at: nil) }
+  scope :unreviewed, -> { where(reviewed_at: nil) }
+
+  # The review states a filter narrows to: one state, or none when the
+  # filter selects both, neither, or only unknown values. Every caller reads
+  # the review checkboxes through this, so they all mean the same thing.
+  def self.narrowing_review_states(states)
+    wanted = Array(states) & REVIEW_STATUSES
+    wanted.one? ? wanted : []
+  end
+
+  scope :with_review_state, ->(states) {
+    case narrowing_review_states(states)
+    when [ "reviewed" ] then reviewed
+    when [ "unreviewed" ] then unreviewed
+    else all
+    end
+  }
+
+  def reviewed?
+    reviewed_at.present?
+  end
+
+  # Marks the transaction as reviewed (or, with `false`, as needing review
+  # again). Touches the entry because caches keyed on entries, such as the
+  # search result totals, would otherwise keep serving the old count.
+  def mark_reviewed!(reviewed = true)
+    update_columns(reviewed_at: reviewed ? Time.current : nil)
+    entry&.touch
+  end
+
   after_save :clear_merchant_unlinked_association, if: :merchant_id_previously_changed?
   after_save :supersede_automatic_category_claims, if: :saved_change_to_category_id?
 

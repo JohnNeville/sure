@@ -469,7 +469,7 @@ class Entry < ApplicationRecord
   # column rules start reading later can't be missed.
   RULE_INPUT_IGNORED_COLUMNS = %w[
     updated_at locked_attributes user_modified
-    import_locked reconciled_at reconciled_by_statement_id
+    import_locked reconciled_at reconciled_by_statement_id reviewed_at
   ].freeze
 
   # What rules can read from this transaction. Taken before an edit and passed
@@ -924,7 +924,17 @@ class Entry < ApplicationRecord
       }.compact_blank
 
       tag_ids = Array.wrap(bulk_update_params[:tag_ids]).reject(&:blank?)
-      has_updates = bulk_attributes.present? || update_tags
+
+      # How the review state changes. Callers that say nothing (the Categorize
+      # flow) mark edited transactions reviewed, as a single edit does; the bulk
+      # edit drawer sends "unchanged" by default so editing leaves it alone.
+      review_mode = case bulk_update_params[:reviewed].to_s
+      when "unchanged" then :unchanged
+      when "true" then :reviewed
+      when "false" then :unreviewed
+      else :when_edited
+      end
+      has_updates = bulk_attributes.present? || update_tags || review_mode.in?(%i[reviewed unreviewed])
 
       return 0 unless has_updates
 
@@ -933,6 +943,8 @@ class Entry < ApplicationRecord
       # account_id => earliest of old/new date, for entries whose date moved
       sync_windows = {}
       rescheduled_ids = []
+      reviewed_entries = []
+      unreviewed_entries = []
 
       transaction do
         # Lock before reading membership. A concurrent match cannot then turn a
@@ -1051,6 +1063,25 @@ class Entry < ApplicationRecord
             end
             updated_count += 1
           end
+
+          if entry.transaction?
+            case review_mode
+            when :reviewed then reviewed_entries << entry
+            when :unreviewed then unreviewed_entries << entry
+            when :when_edited then reviewed_entries << entry if changed
+            end
+            # Setting the review state alone still counts as an updated row.
+            updated_count += 1 if !changed && review_mode.in?(%i[reviewed unreviewed])
+          end
+        end
+
+        # One write per state rather than per entry. Touching the entries keeps
+        # caches keyed on them, such as search totals, current.
+        { reviewed_entries => Time.current, unreviewed_entries => nil }.each do |entries, reviewed_at|
+          next if entries.empty?
+
+          Transaction.where(id: entries.map(&:entryable_id)).update_all(reviewed_at: reviewed_at)
+          Entry.where(id: entries.map(&:id)).update_all(updated_at: Time.current)
         end
       end
 

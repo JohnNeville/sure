@@ -15,7 +15,7 @@ class Transactions::FiltersController < ApplicationController
                 :amount_operator, :active_accounts_only,
                 accounts: [], account_ids: [],
                 categories: [], merchants: [], types: [], tags: [], status: [], ai_status: [],
-                attachment_status: []
+                attachment_status: [], reviewed: []
               )
               .to_h
               .compact_blank
@@ -30,6 +30,11 @@ class Transactions::FiltersController < ApplicationController
       if cleaned_params[:attachment_status]
         cleaned_params[:attachment_status] &= Transaction::Search::ATTACHMENT_STATUSES
         cleaned_params.delete(:attachment_status) if cleaned_params[:attachment_status].empty?
+      end
+
+      if cleaned_params[:reviewed]
+        cleaned_params[:reviewed] &= Transaction::Search::REVIEW_STATUSES
+        cleaned_params.delete(:reviewed) if cleaned_params[:reviewed].empty?
       end
 
       cleaned_params

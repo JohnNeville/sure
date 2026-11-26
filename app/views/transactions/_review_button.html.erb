@@ -1,0 +1,17 @@
+<%# locals: (transaction:) %>
+
+<% label = transaction.reviewed? ? t("transactions.review_button.mark_unreviewed") : t("transactions.review_button.mark_reviewed") %>
+
+<%= tag.div id: dom_id(transaction, :review), class: "shrink-0 flex items-center" do %>
+  <%= render DS::Button.new(
+        variant: :icon,
+        size: :sm,
+        icon: transaction.reviewed? ? "circle-check" : "circle",
+        href: transaction_review_path(transaction.entry),
+        method: :patch,
+        params: { reviewed: !transaction.reviewed? },
+        frame: :_top,
+        title: label,
+        aria: { label: label, pressed: transaction.reviewed? }
+      ) %>
+<% end %>

@@ -478,7 +478,7 @@ class AccountsController < ApplicationController
     def activity_search_params
       q = params.fetch(:q, {}).permit(
         :search, :start_date, :end_date, :amount, :amount_operator, :balance_updates,
-        categories: [], tags: [], merchants: [], types: [], status: [], reconcile_status: []
+        categories: [], tags: [], merchants: [], types: [], status: [], reconcile_status: [], reviewed: []
       )
       # Manual reconciliation only applies to accounts without a live sync.
       # Ignore a stale or crafted filter on a synced account page.

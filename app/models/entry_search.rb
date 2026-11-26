@@ -8,6 +8,7 @@ class EntrySearch
   attribute :types, array: true
   attribute :status, array: true
   attribute :reconcile_status, array: true
+  attribute :reviewed, array: true
   attribute :accounts, array: true
   attribute :account_ids, array: true
   attribute :start_date, :string
@@ -73,6 +74,15 @@ class EntrySearch
       query
     end
 
+    # Only transactions carry a review state, so narrowing to either state
+    # leaves out trades and valuations, as the Uncategorized filter does.
+    # Selecting both states means no filter.
+    def apply_reviewed_filter(scope, states)
+      return scope if Transaction.narrowing_review_states(states).empty?
+
+      scope.where(entryable_type: "Transaction", entryable_id: Transaction.with_review_state(states).select(:id))
+    end
+
     def apply_status_filter(scope, statuses)
       return scope unless statuses.present?
       return scope if statuses.uniq.sort == %w[confirmed pending] # Both selected = no filter
@@ -133,7 +143,7 @@ class EntrySearch
       query = Transaction::Search.apply_merchant_filter(query, merchants)
       query = Transaction::Search.apply_tag_filter(query, tags)
     end
-
+    query = self.class.apply_reviewed_filter(query, reviewed)
     query
   end
 
