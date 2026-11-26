@@ -20,7 +20,7 @@ class IncomeStatement
   def totals(transactions_scope: nil, date_range:)
     # Default to excluding pending transactions from budget/analytics calculations
     # Pending transactions shouldn't affect budget totals until they post
-    transactions_scope ||= family.transactions.visible.excluding_pending.merge(Entry.excluding_scheduled)
+    transactions_scope ||= family.transactions.reportable.excluding_pending.merge(Entry.excluding_scheduled)
 
     result = totals_query(transactions_scope: transactions_scope, date_range: date_range)
 
@@ -45,7 +45,7 @@ class IncomeStatement
     @monthly_income_expense_totals ||= {}
     @monthly_income_expense_totals[key] ||= begin
       rows = monthly_totals_query(
-        transactions_scope: family.transactions.visible.excluding_pending.merge(Entry.excluding_scheduled).in_period(period),
+        transactions_scope: family.transactions.reportable.excluding_pending.merge(Entry.excluding_scheduled).in_period(period),
         date_range: period.date_range
       )
 
@@ -80,7 +80,7 @@ class IncomeStatement
                         .with_split_children(RecurringAllocation.to_family_bills(family).select(:entry_id))
                         .select(:entryable_id)
     rows = totals_query(
-      transactions_scope: family.transactions.visible.excluding_pending.merge(Entry.excluding_scheduled)
+      transactions_scope: family.transactions.reportable.excluding_pending.merge(Entry.excluding_scheduled)
                                 .in_period(period).where(id: paying_bills),
       date_range: period.date_range,
       freshness: bill_allocations_version
@@ -195,14 +195,14 @@ class IncomeStatement
   end
 
   def totals_for(period, account_ids: nil, tag_ids: nil)
-    scope = family.transactions.visible.excluding_pending.merge(Entry.excluding_scheduled).in_period(period)
+    scope = family.transactions.reportable.excluding_pending.merge(Entry.excluding_scheduled).in_period(period)
     scope = scope.where(entries: { account_id: account_ids }) if account_ids.present?
     scope = scope.with_any_tag(tag_ids) if tag_ids.present?
 
     totals(transactions_scope: scope, date_range: period.date_range)
   end
 
-  # Accounts actually reflected in totals/totals_for: visible, not excluded
+  # Accounts actually reflected in totals/totals_for: visible or closed, not excluded
   # from reports, not tax-advantaged, and (when scoped to a user) included in
   # that user's finances. Callers offering an account filter (e.g. a
   # dashboard widget) should build their options from this, not a broader
@@ -210,7 +210,7 @@ class IncomeStatement
   # computes to zero instead of the totals it actually appears in elsewhere.
   def eligible_accounts
     @eligible_accounts ||= begin
-      scope = family.accounts.visible.included_in_reports
+      scope = family.accounts.reportable.included_in_reports
       tax_advantaged_ids = family.tax_advantaged_account_ids
       scope = scope.where.not(id: tax_advantaged_ids) if tax_advantaged_ids.present?
       scope = scope.merge(Account.included_in_finances_for(user)) if user
@@ -307,7 +307,7 @@ class IncomeStatement
       @totals_for_period ||= {}
       key = period_total_cache_key(period, tag_ids)
       @totals_for_period[key] ||= begin
-        scope = family.transactions.visible.excluding_pending.merge(Entry.excluding_scheduled).in_period(period)
+        scope = family.transactions.reportable.excluding_pending.merge(Entry.excluding_scheduled).in_period(period)
         scope = scope.with_any_tag(tag_ids) if tag_ids.present?
         totals_query(transactions_scope: scope, date_range: period.date_range)
       end
@@ -321,7 +321,7 @@ class IncomeStatement
       ]) do
         DailyExpenseTotals.new(
           family,
-          transactions_scope: family.transactions.visible.excluding_pending.merge(Entry.excluding_scheduled).in_period(period),
+          transactions_scope: family.transactions.reportable.excluding_pending.merge(Entry.excluding_scheduled).in_period(period),
           date_range: period.date_range,
           included_account_ids: included_account_ids
         ).call
@@ -341,7 +341,7 @@ class IncomeStatement
       ]) do
         DailyExpenseTotals.new(
           family,
-          transactions_scope: family.transactions.visible.excluding_pending.merge(Entry.excluding_scheduled).in_period(period),
+          transactions_scope: family.transactions.reportable.excluding_pending.merge(Entry.excluding_scheduled).in_period(period),
           date_range: period.date_range,
           included_account_ids: included_account_ids,
           by_category: true

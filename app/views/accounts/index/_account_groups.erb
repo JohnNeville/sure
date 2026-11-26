@@ -1,4 +1,7 @@
-<%# locals: (accounts:) %>
+<%# locals: (accounts:, show_closed: false) %>
+
+<%# Closed accounts are listed in their own collapsed section on the accounts page. %>
+<% accounts = accounts.reject(&:closed?) unless show_closed %>
 
 <% if accounts.any? %>
   <% ActiveRecord::Associations::Preloader.new(

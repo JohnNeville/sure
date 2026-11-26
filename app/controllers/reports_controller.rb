@@ -657,7 +657,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: Current.family.id, status: Account::REPORTABLE_STATUSES })
         .merge(Account.included_in_reports)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: excluded_kinds)
@@ -701,7 +701,7 @@ class ReportsController < ApplicationController
       trades = Trade
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: Current.family.id, status: Account::REPORTABLE_STATUSES })
         .merge(Account.included_in_reports)
         # Buys/sells move value between cash and holdings; keep cash income and fees, decided by label as Portfolio::FlowClassifier does.
         # A qty-0 trade also stays unless its label marks it as a movement (internal, external or transfer).
@@ -1192,7 +1192,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: Current.family.id, status: Account::REPORTABLE_STATUSES })
         .merge(Account.included_in_reports)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: Current.family.analytics_excluded_kinds)
