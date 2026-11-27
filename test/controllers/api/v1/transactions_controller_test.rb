@@ -1646,6 +1646,139 @@ end
     end
   end
 
+  # What an annotate-only writer does to a transaction that already carries
+  # imported data: namespaces are independent, retail merges key by key, and its
+  # items list is replaced as a whole.
+  IMPORTED_EXTRA = {
+    "plaid" => { "pending" => false, "account_number" => "U1234567" },
+    "import" => { "source" => "Quicken", "original_description" => "AMZN MKTP" },
+    "retail" => {
+      "retailer" => "Amazon", "order_number" => "111-1", "status" => "Shipped",
+      "items" => [ { "title" => "Cable" }, { "title" => "Charger" } ]
+    }
+  }.freeze
+
+  test "annotate-only retail write merges into existing retail and leaves other namespaces alone" do
+    key, entry = shared_member_with_imported_extra
+
+    patch_extra(key, entry, retail: { status: "Delivered", order_total: 12.5 })
+
+    assert_response :success
+    expected = IMPORTED_EXTRA.deep_dup
+    expected["retail"].merge!("status" => "Delivered", "order_total" => "12.5")
+    assert_equal expected, entry.transaction.reload.extra
+    assert_equal expected, JSON.parse(response.body)["extra"]
+  end
+
+  test "annotate-only retail items replace the whole list rather than appending" do
+    key, entry = shared_member_with_imported_extra
+
+    patch_extra(key, entry, retail: { items: [ { title: "Adapter" } ] })
+
+    assert_response :success
+    assert_equal [ { "title" => "Adapter" } ], entry.transaction.reload.extra.dig("retail", "items")
+    assert_equal "111-1", entry.transaction.extra.dig("retail", "order_number")
+  end
+
+  test "repeating the same retail write changes nothing" do
+    key, entry = shared_member_with_imported_extra
+
+    2.times do
+      patch_extra(key, entry, retail: IMPORTED_EXTRA["retail"])
+      assert_response :success
+    end
+
+    assert_equal IMPORTED_EXTRA, entry.transaction.reload.extra
+  end
+
+  test "an empty retail or extra object changes nothing" do
+    key, entry = shared_member_with_imported_extra
+
+    [ {}, { retail: {} } ].each do |extra|
+      patch api_v1_transaction_url(entry.transaction),
+            params: { transaction: { extra: extra } }, headers: api_headers(key), as: :json
+
+      assert_response :success, "#{extra.inspect} was refused"
+      assert_equal IMPORTED_EXTRA, entry.transaction.reload.extra
+    end
+  end
+
+  test "annotate-only members can remove retail values, including ones someone else wrote" do
+    key, entry = shared_member_with_imported_extra
+
+    patch_extra(key, entry, retail: { status: nil, order_number: " ", items: [] })
+    assert_response :success
+    assert_equal({ "retailer" => "Amazon" }, entry.transaction.reload.extra["retail"])
+
+    patch_extra(key, entry, retail: nil)
+    assert_response :success
+    assert_equal IMPORTED_EXTRA.except("retail"), entry.transaction.reload.extra
+  end
+
+  test "a retail write alone does not mark the transaction as edited by a person" do
+    key, entry = shared_member_with_imported_extra
+    # Every column but extra and the timestamp, so review state, category and
+    # locks are all covered.
+    snapshot = lambda do
+      [ entry.reload.attributes.except("updated_at"),
+        entry.transaction.reload.attributes.except("extra", "updated_at") ]
+    end
+    before = snapshot.call
+
+    patch_extra(key, entry, retail: { status: "Delivered" })
+
+    assert_response :success
+    assert_equal before, snapshot.call
+  end
+
+  test "annotate-only members can send retail together with a category and notes" do
+    key, entry = shared_member_with_imported_extra
+    category = @user.family.categories.first
+
+    patch api_v1_transaction_url(entry.transaction),
+          params: { transaction: { notes: "matched", category_id: category.id, extra: { retail: { status: "Delivered" } } } },
+          headers: api_headers(key), as: :json
+
+    assert_response :success
+    assert_equal "matched", entry.reload.notes
+    assert_equal category.id, entry.transaction.reload.category_id
+    assert_equal "Delivered", entry.transaction.extra.dig("retail", "status")
+  end
+
+  test "a refused or invalid request applies none of its changes" do
+    key, entry = shared_member_with_imported_extra
+    retail = { status: "Delivered" }
+    too_many = (1..30).to_h { |n| [ "key_#{n}", "x" ] }
+
+    {
+      { amount: 999, extra: { retail: retail } } => :forbidden,
+      { notes: "x", extra: { retail: retail, import: { source: "Other" } } } => :forbidden,
+      { notes: "x", extra: { retail: { status: [ "bad" ] } } } => :unprocessable_entity,
+      { notes: "x", extra: { retail: { status: "x" * 1_001 } } } => :unprocessable_entity,
+      { notes: "x", extra: { retail: too_many } } => :unprocessable_entity
+    }.each do |attrs, status|
+      patch api_v1_transaction_url(entry.transaction),
+            params: { transaction: attrs }, headers: api_headers(key), as: :json
+
+      assert_response status, "for #{attrs.to_json[0, 100]}"
+      assert_nil entry.reload.notes
+      assert_equal 42, entry.amount
+      assert_equal IMPORTED_EXTRA, entry.transaction.reload.extra
+    end
+  end
+
+  test "annotate-only members cannot create a transaction carrying retail" do
+    key, entry = shared_member_key_and_entry("read_write")
+
+    assert_no_difference "Entry.count" do
+      post api_v1_transactions_url,
+           params: { transaction: { account_id: entry.account_id, name: "New", amount: 1, date: Date.current,
+                                    nature: "expense", extra: { retail: { retailer: "Amazon" } } } },
+           headers: api_headers(key), as: :json
+    end
+    assert_not response.successful?
+  end
+
   test "a read_write member cannot change description or user_modified" do
     key, entry = shared_member_key_and_entry("read_write")
 
@@ -2406,6 +2539,17 @@ end
       account.account_shares.create!(user: member, permission: permission, include_in_finances: true)
       entry = account.entries.create!(name: "Shared txn", amount: 42, currency: "USD", date: Date.current, entryable: Transaction.new)
       [ key, entry ]
+    end
+
+    def shared_member_with_imported_extra
+      key, entry = shared_member_key_and_entry("read_write")
+      entry.transaction.update!(extra: IMPORTED_EXTRA.deep_dup)
+      [ key, entry ]
+    end
+
+    def patch_extra(key, entry, extra)
+      patch api_v1_transaction_url(entry.transaction),
+            params: { transaction: { extra: extra } }, headers: api_headers(key), as: :json
     end
 
     def api_headers(api_key)

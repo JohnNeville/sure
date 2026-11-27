@@ -1716,6 +1716,23 @@ class Api::V1::TradesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "annotate-only members cannot write trade extra" do
+    trade = @investment_account.trades.first
+    trade.update!(extra: { "import" => { "source" => "Quicken" } })
+    member = users(:family_member)
+    member.api_keys.active.destroy_all
+    key = ApiKey.create!(user: member, name: "Member", key: ApiKey.generate_secure_key, scopes: %w[read_write], source: "web")
+    Redis.new.del("api_rate_limit:#{key.id}")
+    @investment_account.account_shares.find_or_initialize_by(user: member).update!(permission: "read_write")
+
+    [ { import: { source: "Other" } }, { retail: { retailer: "Amazon" } } ].each do |extra|
+      patch api_v1_trade_url(trade.id), params: { trade: { extra: extra } }, headers: api_headers(key), as: :json
+
+      assert_response :forbidden, "expected #{extra.inspect} to be refused"
+    end
+    assert_equal({ "import" => { "source" => "Quicken" } }, trade.reload.extra)
+  end
+
   test "extra is an empty object when a trade has none" do
     trade = @investment_account.trades.first
     trade.update!(extra: {})
