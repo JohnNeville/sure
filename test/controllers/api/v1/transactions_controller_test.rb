@@ -1573,8 +1573,39 @@ end
     assert_equal [ tag.id ], transaction.tag_ids
   end
 
-  test "a read_write member can write extra and read it back" do
+  test "a read_write member can write extra.retail and read it back" do
     key, entry = shared_member_key_and_entry("read_write")
+
+    patch api_v1_transaction_url(entry.transaction),
+          params: { transaction: { extra: { retail: { retailer: "Amazon" } } } },
+          headers: api_headers(key)
+
+    assert_response :success
+    assert_equal "Amazon", entry.transaction.reload.extra.dig("retail", "retailer")
+    assert_equal "Amazon", JSON.parse(response.body).dig("extra", "retail", "retailer")
+  end
+
+  test "a read_write member cannot write any other part of extra" do
+    key, entry = shared_member_key_and_entry("read_write")
+    entry.transaction.update!(extra: { "import" => { "source" => "Quicken" } })
+
+    [
+      { import: { source: "Other" } },
+      { import: nil },
+      { retail: { retailer: "Amazon" }, import: { source: "Other" } },
+      { plaid: { pending: "false" } },
+      "text"
+    ].each do |extra|
+      patch api_v1_transaction_url(entry.transaction),
+            params: { transaction: { extra: extra } }, headers: api_headers(key), as: :json
+
+      assert_response :forbidden, "expected #{extra.inspect} to be refused"
+    end
+    assert_equal({ "import" => { "source" => "Quicken" } }, entry.transaction.reload.extra)
+  end
+
+  test "a full_control member can write extra.import" do
+    key, entry = shared_member_key_and_entry("full_control")
 
     patch api_v1_transaction_url(entry.transaction),
           params: { transaction: { extra: { import: { source: "Quicken" } } } },
@@ -1582,18 +1613,19 @@ end
 
     assert_response :success
     assert_equal "Quicken", entry.transaction.reload.extra.dig("import", "source")
-    assert_equal "Quicken", JSON.parse(response.body).dig("extra", "import", "source")
   end
 
   test "a read_only member cannot write extra" do
     key, entry = shared_member_key_and_entry("read_only")
 
-    patch api_v1_transaction_url(entry.transaction),
-          params: { transaction: { extra: { import: { source: "Quicken" } } } },
-          headers: api_headers(key)
+    %w[import retail].each do |namespace|
+      patch api_v1_transaction_url(entry.transaction),
+            params: { transaction: { extra: { namespace => { source: "Quicken" } } } },
+            headers: api_headers(key)
 
-    assert_response :forbidden
-    assert_nil entry.transaction.reload.extra&.dig("import")
+      assert_response :forbidden
+    end
+    assert_nil entry.transaction.reload.extra.presence
   end
 
   test "extra is returned only to members who can annotate the account" do

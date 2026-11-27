@@ -252,8 +252,8 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     # Reading needs access to the account. Deleting, or changing anything
     # outside the annotate fields, needs the write tier (AccountPolicy#update?);
     # a member in the annotate tier may only change the AccountShare annotate
-    # fields (notes, category, merchant, tags) and the client namespaces of
-    # extra, which never touch provider data. Otherwise the same split the web UI
+    # fields (notes, category, merchant, tags) and extra.retail (order details
+    # behind a charge, which never touch provider data). Otherwise the same split the web UI
     # applies in TransactionsController#permitted_entry_params. A refused request is a 403,
     # not a silently trimmed update, so the client learns nothing was applied.
     def ensure_write_permission
@@ -266,10 +266,27 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     # transaction_params are ignored on update for every role (account_id
     # included), so they cannot widen what an annotate-tier member changes.
     def annotate_only_update?
+      return false if extra_beyond_annotation?
+
       transaction_params.except(
         *AccountShare::ANNOTATE_ENTRY_ATTRIBUTES, *AccountShare::ANNOTATE_TRANSACTION_ATTRIBUTES,
         :reviewed # annotate tiers may mark rows reviewed, as in the web app
       ).empty?
+    end
+
+    # The namespaces of extra an annotate-tier member may write. Anything else,
+    # extra.import included, takes write access to the account.
+    ANNOTATE_EXTRA_NAMESPACES = %w[retail].freeze
+
+    # An extra that is not an object counts as beyond annotation, so it is
+    # refused for that tier before it is validated.
+    def extra_beyond_annotation?
+      return false unless extra_provided?
+
+      extra = params.dig(:transaction, :extra)
+      return true unless extra.respond_to?(:keys)
+
+      (extra.keys.map(&:to_s) - ANNOTATE_EXTRA_NAMESPACES).any?
     end
 
     def ensure_read_scope
